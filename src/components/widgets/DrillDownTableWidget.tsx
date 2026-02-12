@@ -85,12 +85,17 @@ export function DrillDownTableWidget({ widget }: { widget: Widget }) {
 
   const allCols = Object.keys(data[0]);
   const detailCols = detailColumns ?? allCols.filter((c) => c !== groupKey);
-  const summaryCols = summaryColumns ?? [
-    groupKey,
-    ...allCols.filter(
-      (c) => c !== groupKey && data.some((r) => typeof r[c] === "number"),
-    ),
-    "_count",
+
+  // Always include groupKey as first summary column + count at end
+  const baseSummary = summaryColumns ?? allCols.filter(
+    (c) => c !== groupKey && data.some((r) => typeof r[c] === "number"),
+  );
+  const summaryCols = [
+    // groupKey always first so the name is always visible
+    ...(baseSummary.includes(groupKey) ? [] : [groupKey]),
+    ...baseSummary,
+    // row count always last
+    ...(baseSummary.includes("_count") ? [] : ["_count"]),
   ];
 
   const toggle = (key: string) => {

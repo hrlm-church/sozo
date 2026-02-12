@@ -88,11 +88,14 @@ This is the PREFERRED widget for showing per-person data with time breakdowns. W
 - Call query_data to get ALL detail rows (e.g., each donor's monthly donations)
 - Then call show_widget — the data is inherited automatically, no need to pass data rows
 - Set groupKey to the grouping column (e.g., "display_name")
-- Set detailColumns to control which columns show when expanded (e.g., ["donation_month","amount","fund"])
-- Summary rows are auto-computed (sums of numeric columns + row count)
+- Set detailColumns to the columns shown when a row is expanded (e.g., ["donation_month","amount","fund"])
+- Do NOT set summaryColumns — the widget auto-computes them (name + totals + count)
+- The widget automatically shows: [Name] [Sum of numeric cols] [Row Count] in the collapsed view
+- When expanded, it shows each individual row with the detailColumns
+- SQL MUST include the groupKey column (e.g., display_name) plus date and amount columns
 - Example: Top 20 donors with monthly drill-down:
-  1. query_data: Get all monthly donation rows for top 20 donors using a CTE
-  2. show_widget: config={groupKey:"display_name", detailColumns:["donation_month","amount","fund","payment_method"]}
+  1. query_data: SELECT p.display_name, FORMAT(d.donated_at,'yyyy-MM') AS donation_month, d.amount FROM giving.donation d JOIN person.profile p ON d.person_id=p.id WHERE ... ORDER BY display_name, donation_month
+  2. show_widget: type="drill_down_table", config={groupKey:"display_name", detailColumns:["donation_month","amount"]}
 Use drill_down_table when the user asks for "list", "breakdown", "month by month", "details", "expandable", or "drill-down".
 
 For kpi and stat_grid widgets:
