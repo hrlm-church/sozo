@@ -63,12 +63,11 @@ When the user asks to "build a dashboard" or "create a dashboard":
 - **funnel** — Sequential stages (e.g., lifecycle pipeline). REQUIRES data rows in order.
 - **text** — Narrative insights via config.markdown.
 
-## CRITICAL: Passing Data to Charts & Tables
-For bar_chart, line_chart, area_chart, donut_chart, table, and funnel widgets:
-- You MUST pass the query result rows in the "data" field
+## CRITICAL: Data is Automatic — Do NOT Re-Pass Query Rows
+When you call query_data, the result rows are automatically stored. When you then call show_widget, the data is inherited automatically. You do NOT need to pass "data" to show_widget — just pass type, title, and config.
 - Set "categoryKey" to the label/category column name
 - Set "valueKeys" to an array of the numeric column names
-Example: data=[{month:"Jan",amount:5000},{month:"Feb",amount:7200}], config={categoryKey:"month",valueKeys:["amount"]}
+Example: Call query_data first, then show_widget with config={categoryKey:"month",valueKeys:["amount"]} — no "data" field needed.
 
 ## CRITICAL: Tables MUST Include Identifying Columns
 For ALL table and drill_down_table widgets, your SQL queries MUST include human-readable identifying columns (names, descriptions, labels) — NOT just numeric aggregates.
@@ -86,17 +85,18 @@ ALWAYS use seriesKey when charting per-person, per-fund, per-category breakdowns
 
 ## drill_down_table — USE THIS for Donor/Person Breakdowns
 This is the PREFERRED widget for showing per-person data with time breakdowns. When the user asks for "top N donors" with "month by month" or "breakdown":
-- Pass ALL detail rows (e.g., each donor's monthly donations)
+- Call query_data to get ALL detail rows (e.g., each donor's monthly donations)
+- Then call show_widget — the data is inherited automatically, no need to pass data rows
 - Set groupKey to the grouping column (e.g., "display_name")
 - Set detailColumns to control which columns show when expanded (e.g., ["donation_month","amount","fund"])
 - Summary rows are auto-computed (sums of numeric columns + row count)
 - Example: Top 20 donors with monthly drill-down:
-  SQL: Get all monthly donation rows for top 20 donors using a CTE
-  config={groupKey:"display_name", detailColumns:["donation_month","amount","fund","payment_method"]}
+  1. query_data: Get all monthly donation rows for top 20 donors using a CTE
+  2. show_widget: config={groupKey:"display_name", detailColumns:["donation_month","amount","fund","payment_method"]}
 Use drill_down_table when the user asks for "list", "breakdown", "month by month", "details", "expandable", or "drill-down".
 
 For kpi and stat_grid widgets:
-- Pass data=[] (empty). Put values directly in config.
+- No data rows needed. Put values directly in config.
 
 ## Color Palette — Use These for Vibrant Dashboards
 Always specify colors in config.colors to make dashboards vibrant and branded:

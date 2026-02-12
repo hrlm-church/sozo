@@ -75,8 +75,12 @@ export function DrillDownTableWidget({ widget }: { widget: Widget }) {
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  if (!groupKey || !data.length) {
-    return <div style={{ padding: 16, color: "var(--text-muted)" }}>No data or missing groupKey config</div>;
+  if (!groupKey || !data || !data.length) {
+    return (
+      <div style={{ padding: 16, color: "var(--text-muted)", fontSize: "0.85rem" }}>
+        {!groupKey ? "Waiting for data configuration..." : "No data rows returned from query."}
+      </div>
+    );
   }
 
   const allCols = Object.keys(data[0]);

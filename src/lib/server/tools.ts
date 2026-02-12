@@ -4,14 +4,27 @@ import { guardSql, QUERY_TIMEOUT_MS } from "@/lib/server/sql-guard";
 import { executeSql } from "@/lib/server/sql-client";
 import type { Widget, WidgetType, WidgetConfig } from "@/types/widget";
 
-/** All LLM tools for the chat API */
+/**
+ * All LLM tools for the chat API.
+ *
+ * Each call creates a fresh closure so query results can be shared
+ * between query_data → show_widget within one request without forcing
+ * the LLM to re-emit every row as tool-call arguments (saves tokens,
+ * avoids truncation on large result sets).
+ */
 export function getChatTools() {
+  // Shared state: last successful query result, keyed by sql string
+  let lastQueryRows: Record<string, unknown>[] = [];
+  let lastQuerySql: string | undefined;
+
   return {
     query_data: tool({
       description:
         "Execute a read-only SQL SELECT query against Azure SQL. " +
         "Returns up to 500 rows. Use this to fetch data before showing a widget. " +
-        "Only SELECT and WITH (CTE) queries are allowed.",
+        "Only SELECT and WITH (CTE) queries are allowed. " +
+        "The query results are automatically available to show_widget — " +
+        "you do NOT need to pass the data rows again.",
       inputSchema: z.object({
         sql: z.string().describe("The SQL SELECT query to execute"),
         purpose: z
@@ -32,6 +45,9 @@ export function getChatTools() {
             sql: guard.sanitized,
           };
         }
+        // Store for show_widget to use
+        lastQueryRows = result.rows;
+        lastQuerySql = guard.sanitized;
         return {
           ok: true as const,
           rowCount: result.rows.length,
@@ -46,6 +62,8 @@ export function getChatTools() {
       description:
         "Display a visual widget (chart, KPI, table, etc.) to the user. " +
         "Call query_data first to get data, then call this to render it. " +
+        "Data rows are automatically inherited from the last query_data call — " +
+        "you do NOT need to pass data rows. Just pass type, title, and config. " +
         "The widget will appear inline in the chat response.",
       inputSchema: z.object({
         type: z
@@ -67,7 +85,7 @@ export function getChatTools() {
           .array(z.record(z.string(), z.unknown()))
           .optional()
           .default([])
-          .describe("Array of data rows for the widget (optional for kpi/text widgets)"),
+          .describe("Data rows (optional — automatically uses last query_data result if empty)"),
         config: z
           .object({
             categoryKey: z.string().optional(),
@@ -103,13 +121,17 @@ export function getChatTools() {
           .describe("The SQL query that produced this data (for reference)"),
       }),
       execute: async ({ type, title, data, config, sql: sqlQuery }) => {
+        // Use provided data if non-empty, otherwise fall back to last query result
+        const widgetData = (data && data.length > 0) ? data : lastQueryRows;
+        const widgetSql = sqlQuery ?? lastQuerySql;
+
         const widget: Widget = {
           id: crypto.randomUUID(),
           type: type as WidgetType,
           title,
-          data: data as Record<string, unknown>[],
+          data: widgetData as Record<string, unknown>[],
           config: config as WidgetConfig,
-          sql: sqlQuery,
+          sql: widgetSql,
           createdAt: new Date().toISOString(),
         };
         return { widget };
