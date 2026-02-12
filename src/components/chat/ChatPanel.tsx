@@ -50,6 +50,24 @@ export function ChatPanel() {
       .join("");
   }
 
+  /** Get in-progress tool call info for streaming indicator */
+  function getActiveToolCalls(message: UIMessage): string[] {
+    if (!message.parts) return [];
+    const active: string[] = [];
+    for (const part of message.parts) {
+      if (isToolUIPart(part)) {
+        const name = getToolName(part);
+        const p = part as Record<string, unknown>;
+        if (name === "query_data" && p.state !== "output-available") {
+          active.push("Querying database...");
+        } else if (name === "show_widget" && p.state !== "output-available") {
+          active.push("Building visualization...");
+        }
+      }
+    }
+    return active;
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -132,15 +150,19 @@ export function ChatPanel() {
                 </div>
               );
             })}
-            {isLoading && (
-              <div style={{
-                padding: "10px 16px", borderRadius: 18, background: "#f0f0f2",
-                color: "var(--text-muted)", fontSize: "0.84rem", marginRight: 24,
-                borderBottomLeftRadius: 6,
-              }}>
-                Thinking...
-              </div>
-            )}
+            {isLoading && (() => {
+              const lastAssistant = [...messages].reverse().find(m => m.role === "assistant");
+              const toolActivity = lastAssistant ? getActiveToolCalls(lastAssistant) : [];
+              return (
+                <div style={{
+                  padding: "10px 16px", borderRadius: 18, background: "#f0f0f2",
+                  color: "var(--text-muted)", fontSize: "0.84rem", marginRight: 24,
+                  borderBottomLeftRadius: 6,
+                }}>
+                  {toolActivity.length > 0 ? toolActivity[toolActivity.length - 1] : "Thinking..."}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

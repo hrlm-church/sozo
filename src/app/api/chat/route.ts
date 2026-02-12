@@ -130,10 +130,16 @@ export async function POST(request: Request) {
       );
     }
 
+    console.log("[chat] Starting request with", uiMessages.length, "messages");
+
     const model = getReasoningModel();
     const tools = getChatTools();
 
+    console.log("[chat] Model and tools ready");
+
     const modelMessages = await convertToModelMessages(uiMessages);
+
+    console.log("[chat] Converted", modelMessages.length, "model messages, starting stream");
 
     const result = streamText({
       model,
@@ -142,10 +148,17 @@ export async function POST(request: Request) {
       tools,
       stopWhen: stepCountIs(4),
       temperature: 0.2,
+      onError: ({ error }) => {
+        console.error("[chat] Stream error:", error);
+      },
+      onFinish: ({ text, finishReason, usage }) => {
+        console.log("[chat] Stream finished:", { finishReason, usage, textLen: text?.length });
+      },
     });
 
     return result.toUIMessageStreamResponse();
   } catch (error) {
+    console.error("[chat] Route error:", error);
     return new Response(
       JSON.stringify({
         error:
