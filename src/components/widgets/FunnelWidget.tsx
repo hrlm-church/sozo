@@ -2,7 +2,7 @@
 
 import type { Widget } from "@/types/widget";
 
-const COLORS = ["#6f43ea", "#2f7ff6", "#17c6b8", "#f59e0b", "#ef4444", "#8b5cf6"];
+const COLORS = ["#0693e3", "#9b51e0", "#17c6b8", "#f59e0b", "#f43f5e", "#3ba4e8"];
 
 export function FunnelWidget({ widget }: { widget: Widget }) {
   const { data, config } = widget;
@@ -22,7 +22,7 @@ export function FunnelWidget({ widget }: { widget: Widget }) {
             <div style={{ width: 90, fontSize: "0.8rem", color: "var(--text-muted)", textAlign: "right", flexShrink: 0 }}>
               {label}
             </div>
-            <div style={{ flex: 1, background: "var(--surface)", borderRadius: 6, overflow: "hidden", height: 28 }}>
+            <div style={{ flex: 1, background: "var(--surface-elevated)", borderRadius: 6, overflow: "hidden", height: 28 }}>
               <div
                 style={{
                   width: `${pct}%`,

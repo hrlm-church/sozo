@@ -5,7 +5,7 @@ import { ChartContainer, ChartTooltip, ChartLegend, type ChartConfig } from "@/c
 import { LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts";
 import { pivotIfNeeded } from "./pivot-data";
 
-const DEFAULT_COLORS = ["#6f43ea", "#2f7ff6", "#17c6b8", "#f59e0b", "#f43f5e", "#8b5cf6", "#ec4899", "#14b8a6"];
+const DEFAULT_COLORS = ["#0693e3", "#9b51e0", "#17c6b8", "#f59e0b", "#f43f5e", "#3ba4e8", "#ec4899", "#14b8a6"];
 
 export function LineChartWidget({ widget }: { widget: Widget }) {
   const { config } = widget;

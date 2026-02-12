@@ -22,12 +22,7 @@ export function DashboardToolbar() {
       const resp = await fetch("/api/dashboard/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: dashboardId,
-          name,
-          widgets,
-          layouts,
-        }),
+        body: JSON.stringify({ id: dashboardId, name, widgets, layouts }),
       });
       if (resp.ok) {
         const data = await resp.json();
@@ -43,10 +38,10 @@ export function DashboardToolbar() {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
-        padding: "12px 20px",
+        gap: 14,
+        padding: "12px 24px",
         borderBottom: "1px solid var(--surface-border)",
-        background: "var(--surface-strong)",
+        background: "#fff",
         flexShrink: 0,
       }}
     >
@@ -56,18 +51,21 @@ export function DashboardToolbar() {
         style={{
           background: "transparent",
           border: "none",
-          fontSize: "1.05rem",
-          fontWeight: 650,
+          fontSize: "1rem",
+          fontWeight: 600,
           color: "var(--text-primary)",
           outline: "none",
           flex: 1,
           minWidth: 0,
+          letterSpacing: "-0.02em",
         }}
       />
 
       {dirty && (
-        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
-          unsaved
+        <span style={{
+          fontSize: "0.68rem", color: "var(--text-muted)", fontWeight: 500,
+        }}>
+          Edited
         </span>
       )}
 
@@ -79,48 +77,23 @@ export function DashboardToolbar() {
         onClick={handleSave}
         disabled={saving || widgets.length === 0}
         className="gradient-btn"
-        style={{ padding: "6px 16px", fontSize: "0.8rem" }}
+        style={{ padding: "7px 18px", fontSize: "0.82rem" }}
       >
         {saving ? "Saving..." : "Save"}
       </button>
 
-      <button
-        onClick={clearDashboard}
-        style={{
-          background: "none",
-          border: "1px solid var(--surface-border)",
-          borderRadius: "var(--r-sm)",
-          padding: "6px 12px",
-          fontSize: "0.8rem",
-          color: "var(--text-muted)",
-          cursor: "pointer",
-        }}
-      >
+      <button onClick={clearDashboard} className="btn-secondary">
         Clear
       </button>
 
-      {/* Spacer */}
-      <div style={{ flex: "0 0 1px", height: 20, background: "var(--surface-border)", margin: "0 4px" }} />
+      <div style={{ width: 1, height: 18, background: "var(--surface-border-strong)", flexShrink: 0 }} />
 
-      {/* User info + sign out */}
       {session?.user && (
         <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
           {session.user.name ?? session.user.email}
         </span>
       )}
-      <button
-        onClick={() => signOut()}
-        style={{
-          background: "none",
-          border: "1px solid var(--surface-border)",
-          borderRadius: "var(--r-sm)",
-          padding: "6px 12px",
-          fontSize: "0.8rem",
-          color: "var(--text-muted)",
-          cursor: "pointer",
-          whiteSpace: "nowrap",
-        }}
-      >
+      <button onClick={() => signOut()} className="btn-secondary" style={{ color: "var(--text-muted)" }}>
         Sign out
       </button>
     </div>

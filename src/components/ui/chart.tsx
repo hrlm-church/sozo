@@ -67,13 +67,13 @@ function CustomTooltipContent({ active, payload, label }: {
 
   return (
     <div style={{
-      background: "rgba(22,26,42,0.92)", backdropFilter: "blur(8px)",
-      border: "1px solid rgba(255,255,255,0.08)",
+      background: "#ffffff",
+      border: "1px solid #d2d2d7",
       borderRadius: 10, padding: "10px 14px",
-      boxShadow: "0 8px 32px rgba(0,0,0,0.24)",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
     }}>
       {label && (
-        <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.6)", marginBottom: 6, fontWeight: 600 }}>
+        <div style={{ fontSize: "0.72rem", color: "#86868b", marginBottom: 6, fontWeight: 600 }}>
           {label}
         </div>
       )}
@@ -82,10 +82,10 @@ function CustomTooltipContent({ active, payload, label }: {
           <div style={{
             width: 8, height: 8, borderRadius: "50%", background: entry.color, flexShrink: 0,
           }} />
-          <span style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.7)", minWidth: 60 }}>
+          <span style={{ fontSize: "0.78rem", color: "#6e6e73", minWidth: 60 }}>
             {entry.name}
           </span>
-          <span style={{ fontSize: "0.78rem", color: "#fff", fontWeight: 700, marginLeft: "auto" }}>
+          <span style={{ fontSize: "0.78rem", color: "#1d1d1f", fontWeight: 700, marginLeft: "auto" }}>
             {typeof entry.value === "number" ? entry.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : entry.value}
           </span>
         </div>
@@ -97,7 +97,7 @@ function CustomTooltipContent({ active, payload, label }: {
 export function ChartTooltip(props: ComponentProps<typeof RechartsTooltip>) {
   return (
     <RechartsTooltip
-      cursor={{ fill: "rgba(111,67,234,0.06)" }}
+      cursor={{ fill: "rgba(6,147,227,0.06)" }}
       content={<CustomTooltipContent />}
       {...props}
     />

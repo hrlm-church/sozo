@@ -22,8 +22,7 @@ export function KpiWidget({ widget }: { widget: Widget }) {
   const { config } = widget;
   const trend = config.trend;
   const arrow = trend === "up" ? "\u25B2" : trend === "down" ? "\u25BC" : "";
-  const trendColor = trend === "up" ? "#10b981" : trend === "down" ? "#ef4444" : "var(--text-muted)";
-  const trendBg = trend === "up" ? "rgba(16,185,129,0.1)" : trend === "down" ? "rgba(239,68,68,0.1)" : "transparent";
+  const trendColor = trend === "up" ? "var(--green)" : trend === "down" ? "var(--red)" : "var(--text-muted)";
 
   return (
     <div style={{
@@ -31,18 +30,18 @@ export function KpiWidget({ widget }: { widget: Widget }) {
       height: "100%", gap: 8, padding: "12px 0",
     }}>
       <div style={{
-        fontSize: "2.8rem", fontWeight: 800, lineHeight: 1,
-        color: "var(--text-primary)", letterSpacing: "-0.02em",
+        fontSize: "3rem", fontWeight: 700, lineHeight: 1,
+        background: "var(--accent-gradient)", WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent", letterSpacing: "-0.04em",
       }}>
         {formatValue(config.value, config.numberFormat, config.unit)}
       </div>
       {config.delta !== undefined && (
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 4,
-          fontSize: "0.85rem", fontWeight: 600, color: trendColor,
-          background: trendBg, padding: "4px 12px", borderRadius: 20,
+          fontSize: "0.82rem", fontWeight: 500, color: trendColor,
         }}>
-          {arrow && <span style={{ fontSize: "0.65rem" }}>{arrow}</span>}
+          {arrow && <span style={{ fontSize: "0.6rem" }}>{arrow}</span>}
           {config.delta}
         </div>
       )}

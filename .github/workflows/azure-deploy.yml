@@ -1,0 +1,45 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js standalone
+        run: npm run build
+        env:
+          SOZO_AZURE_RESOURCE_GROUP: ${{ secrets.SOZO_AZURE_RESOURCE_GROUP }}
+          SOZO_AZURE_LOCATION: ${{ secrets.SOZO_AZURE_LOCATION }}
+          SOZO_STORAGE_ACCOUNT: ${{ secrets.SOZO_STORAGE_ACCOUNT }}
+          SOZO_SERVICEBUS_NAMESPACE: ${{ secrets.SOZO_SERVICEBUS_NAMESPACE }}
+          SOZO_SQL_HOST: ${{ secrets.SOZO_SQL_HOST }}
+          SOZO_SQL_DB: ${{ secrets.SOZO_SQL_DB }}
+          SOZO_SEARCH_SERVICE_NAME: ${{ secrets.SOZO_SEARCH_SERVICE_NAME }}
+
+      - name: Prepare standalone package
+        run: |
+          cp -r .next/standalone ./deploy
+          cp -r .next/static ./deploy/.next/static
+          cp -r public ./deploy/public 2>/dev/null || true
+          cd deploy && zip -r ../deploy.zip . -x '*.git*'
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: sozo-app
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: deploy.zip

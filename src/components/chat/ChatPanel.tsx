@@ -20,14 +20,12 @@ export function ChatPanel() {
 
   const isLoading = status === "submitted" || status === "streaming";
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
-  /** Extract widgets from tool invocations in a message */
   function getWidgets(message: UIMessage): Widget[] {
     const result: Widget[] = [];
     if (!message.parts) return result;
@@ -37,16 +35,13 @@ export function ChatPanel() {
         const p = part as Record<string, unknown>;
         if (name === "show_widget" && p.state === "output-available" && p.output) {
           const output = p.output as { widget?: Widget };
-          if (output.widget) {
-            result.push(output.widget);
-          }
+          if (output.widget) result.push(output.widget);
         }
       }
     }
     return result;
   }
 
-  /** Get text content from a message */
   function getTextContent(message: UIMessage): string {
     if (!message.parts) return "";
     return message.parts
@@ -72,73 +67,61 @@ export function ChatPanel() {
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        background: "var(--surface-strong)",
+        background: "#fff",
         borderRight: "1px solid var(--surface-border)",
       }}
     >
       {/* Header */}
-      <div
-        style={{
-          padding: "16px 20px",
-          borderBottom: "1px solid var(--surface-border)",
-          flexShrink: 0,
-        }}
-      >
-        <h2 style={{ fontSize: "1rem", fontWeight: 650, color: "var(--text-primary)" }}>
-          Sozo Chat
+      <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--surface-border)", flexShrink: 0 }}>
+        <h2 style={{
+          fontSize: "1.1rem", fontWeight: 700, margin: 0, letterSpacing: "-0.02em",
+          background: "var(--accent-gradient)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+        }}>
+          Sozo
         </h2>
-        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 2 }}>
-          Ask anything or build a dashboard
+        <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", margin: 0, marginTop: 2 }}>
+          Ministry Intelligence
         </p>
       </div>
 
       {/* Messages area */}
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          overflow: "auto",
-          padding: "16px 20px",
-        }}
-      >
+      <div ref={scrollRef} style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
         {messages.length === 0 ? (
           <SuggestedPrompts onSelect={handleSuggestedPrompt} />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {messages.map((message) => {
               const text = getTextContent(message);
-              const widgets = getWidgets(message);
-
+              const msgWidgets = getWidgets(message);
               return (
                 <div key={message.id}>
-                  {/* Text content */}
                   {text && (
                     <div
                       style={{
-                        padding: "10px 14px",
-                        borderRadius: "var(--r-md)",
-                        fontSize: "0.85rem",
-                        lineHeight: 1.5,
+                        padding: "10px 16px",
+                        borderRadius: 18,
+                        fontSize: "0.84rem",
+                        lineHeight: 1.55,
                         ...(message.role === "user"
                           ? {
-                              background: "var(--accent-purple)",
+                              background: "var(--accent-gradient)",
                               color: "#fff",
-                              marginLeft: 40,
+                              marginLeft: 48,
+                              borderBottomRightRadius: 6,
                             }
                           : {
-                              background: "var(--surface)",
+                              background: "#f0f0f2",
                               color: "var(--text-primary)",
-                              marginRight: 20,
+                              marginRight: 24,
+                              borderBottomLeftRadius: 6,
                             }),
                       }}
                     >
                       {text}
                     </div>
                   )}
-
-                  {/* Inline widgets from tool invocations */}
-                  {widgets.map((widget) => (
-                    <div key={widget.id} style={{ marginTop: 8, height: 280 }}>
+                  {msgWidgets.map((widget) => (
+                    <div key={widget.id} style={{ marginTop: 10, height: 280 }}>
                       <WidgetRenderer
                         widget={widget}
                         onPin={() => addWidget(widget)}
@@ -149,18 +132,12 @@ export function ChatPanel() {
                 </div>
               );
             })}
-
             {isLoading && (
-              <div
-                style={{
-                  padding: "10px 14px",
-                  borderRadius: "var(--r-md)",
-                  background: "var(--surface)",
-                  color: "var(--text-muted)",
-                  fontSize: "0.85rem",
-                  marginRight: 20,
-                }}
-              >
+              <div style={{
+                padding: "10px 16px", borderRadius: 18, background: "#f0f0f2",
+                color: "var(--text-muted)", fontSize: "0.84rem", marginRight: 24,
+                borderBottomLeftRadius: 6,
+              }}>
                 Thinking...
               </div>
             )}
@@ -168,16 +145,8 @@ export function ChatPanel() {
         )}
       </div>
 
-      {/* Error display */}
       {error && (
-        <div
-          style={{
-            padding: "8px 20px",
-            fontSize: "0.8rem",
-            color: "#ef4444",
-            flexShrink: 0,
-          }}
-        >
+        <div style={{ padding: "8px 24px", fontSize: "0.75rem", color: "var(--red)", flexShrink: 0 }}>
           {error.message}
         </div>
       )}
@@ -186,34 +155,37 @@ export function ChatPanel() {
       <form
         onSubmit={handleSubmit}
         style={{
-          padding: "12px 20px",
+          padding: "14px 24px",
           borderTop: "1px solid var(--surface-border)",
           display: "flex",
-          gap: 8,
+          gap: 10,
           flexShrink: 0,
         }}
       >
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask anything or say 'build me a dashboard'..."
+          placeholder="Ask anything..."
           disabled={isLoading}
           style={{
             flex: 1,
-            padding: "10px 14px",
-            borderRadius: "var(--r-md)",
-            border: "1px solid var(--surface-border)",
-            background: "var(--surface)",
-            fontSize: "0.85rem",
+            padding: "10px 16px",
+            borderRadius: "var(--r-pill)",
+            border: "1px solid var(--surface-border-strong)",
+            background: "var(--app-bg)",
+            fontSize: "0.84rem",
             outline: "none",
             color: "var(--text-primary)",
+            transition: "border-color 150ms ease",
           }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = "var(--surface-border-strong)"; }}
         />
         <button
           type="submit"
           disabled={isLoading || !input.trim()}
           className="gradient-btn"
-          style={{ padding: "10px 20px", fontSize: "0.85rem" }}
+          style={{ padding: "10px 22px", fontSize: "0.84rem" }}
         >
           Send
         </button>

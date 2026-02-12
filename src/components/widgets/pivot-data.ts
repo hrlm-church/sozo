@@ -11,10 +11,10 @@ import type { WidgetConfig } from "@/types/widget";
  */
 
 const PALETTE = [
-  "#6f43ea", "#2f7ff6", "#17c6b8", "#f59e0b", "#f43f5e",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#10b981",
-  "#3b82f6", "#fbbf24", "#fb7185", "#60a5fa", "#34d399",
-  "#a78bfa", "#f472b6", "#2dd4bf", "#fb923c", "#6ee7b7",
+  "#0693e3", "#9b51e0", "#17c6b8", "#f59e0b", "#f43f5e",
+  "#3ba4e8", "#b07ce6", "#14b8a6", "#f97316", "#10b981",
+  "#60b5ed", "#c5a7ec", "#2dd4bf", "#fbbf24", "#34d399",
+  "#ec4899", "#fb923c", "#60a5fa", "#fb7185", "#6ee7b7",
 ];
 
 export function pivotIfNeeded(

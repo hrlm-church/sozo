@@ -23,13 +23,7 @@ export function DashboardCanvas() {
   const onLayoutChange = useCallback(
     (newLayout: Layout) => {
       const mapped: WidgetLayout[] = newLayout.map((l) => ({
-        i: l.i,
-        x: l.x,
-        y: l.y,
-        w: l.w,
-        h: l.h,
-        minW: l.minW,
-        minH: l.minH,
+        i: l.i, x: l.x, y: l.y, w: l.w, h: l.h, minW: l.minW, minH: l.minH,
       }));
       updateLayout(mapped);
     },
@@ -41,19 +35,18 @@ export function DashboardCanvas() {
       <div
         ref={containerRef}
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          color: "var(--text-muted)",
-          fontSize: "0.9rem",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          height: "100%", color: "var(--text-muted)", fontSize: "0.88rem",
         }}
       >
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: 8, opacity: 0.4 }}>
-            &#9633;
-          </div>
-          <p>Pin widgets from chat to build your dashboard</p>
+          <div style={{ fontSize: "2rem", marginBottom: 12, opacity: 0.25 }}>+</div>
+          <p style={{ margin: 0, fontWeight: 500, color: "var(--text-secondary)" }}>
+            Pin widgets from chat to build your dashboard
+          </p>
+          <p style={{ margin: "4px 0 0", fontSize: "0.78rem" }}>
+            Ask Sozo a question to get started
+          </p>
         </div>
       </div>
     );
@@ -65,14 +58,8 @@ export function DashboardCanvas() {
         <GridLayout
           layout={layouts as unknown as Layout}
           width={width}
-          gridConfig={{
-            cols: 12,
-            rowHeight: 60,
-            margin: [16, 16] as const,
-          }}
-          dragConfig={{
-            handle: ".widget-drag-handle",
-          }}
+          gridConfig={{ cols: 12, rowHeight: 60, margin: [16, 16] as const }}
+          dragConfig={{ handle: ".widget-drag-handle" }}
           onLayoutChange={onLayoutChange}
           autoSize
         >
@@ -81,11 +68,7 @@ export function DashboardCanvas() {
             if (!widget) return null;
             return (
               <div key={l.i} className="widget-drag-handle" style={{ cursor: "grab" }}>
-                <WidgetRenderer
-                  widget={widget}
-                  onRemove={() => removeWidget(widget.id)}
-                  isPinned
-                />
+                <WidgetRenderer widget={widget} onRemove={() => removeWidget(widget.id)} isPinned />
               </div>
             );
           })}

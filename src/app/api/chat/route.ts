@@ -56,12 +56,19 @@ When the user asks to "build a dashboard" or "create a dashboard":
 - **funnel** — Sequential stages (e.g., lifecycle pipeline). REQUIRES data rows in order.
 - **text** — Narrative insights via config.markdown.
 
-## CRITICAL: Passing Data to Charts
+## CRITICAL: Passing Data to Charts & Tables
 For bar_chart, line_chart, area_chart, donut_chart, table, and funnel widgets:
 - You MUST pass the query result rows in the "data" field
 - Set "categoryKey" to the label/category column name
 - Set "valueKeys" to an array of the numeric column names
 Example: data=[{month:"Jan",amount:5000},{month:"Feb",amount:7200}], config={categoryKey:"month",valueKeys:["amount"]}
+
+## CRITICAL: Tables MUST Include Identifying Columns
+For ALL table and drill_down_table widgets, your SQL queries MUST include human-readable identifying columns (names, descriptions, labels) — NOT just numeric aggregates.
+- BAD: SELECT TOP 20 SUM(amount) as total FROM giving.donation GROUP BY person_id → renders as a list of numbers with no context
+- GOOD: SELECT TOP 20 p.display_name, SUM(d.amount) as total_given, COUNT(*) as donations FROM giving.donation d JOIN person.profile p ON d.person_id = p.id GROUP BY p.display_name ORDER BY total_given DESC → renders a rich table with names and context
+- ALWAYS include display_name, fund_name, source_system, date columns, or other descriptive fields alongside numeric aggregates
+- ALWAYS JOIN to person.profile to get display_name when querying by person_id
 
 ## seriesKey — Multi-Series Charts from Long-Format Data
 When query returns rows like [{name:"Alice",month:"Jan",amount:100},{name:"Bob",month:"Jan",amount:200}],
@@ -86,8 +93,8 @@ For kpi and stat_grid widgets:
 
 ## Color Palette — Use These for Vibrant Dashboards
 Always specify colors in config.colors to make dashboards vibrant and branded:
-- Purple (brand):  "#6f43ea", "#8b5cf6", "#a78bfa"
-- Blue:            "#2f7ff6", "#3b82f6", "#60a5fa"
+- Blue (brand):    "#0693e3", "#3ba4e8", "#60b5ed"
+- Purple (brand):  "#9b51e0", "#b07ce6", "#c5a7ec"
 - Teal:            "#17c6b8", "#14b8a6", "#2dd4bf"
 - Amber:           "#f59e0b", "#fbbf24", "#fcd34d"
 - Rose:            "#f43f5e", "#fb7185", "#fda4af"
@@ -133,7 +140,7 @@ export async function POST(request: Request) {
       system: SYSTEM_PROMPT,
       messages: modelMessages,
       tools,
-      stopWhen: stepCountIs(8),
+      stopWhen: stepCountIs(4),
       temperature: 0.2,
     });
 

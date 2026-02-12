@@ -1,24 +1,40 @@
+import { createOpenAI } from "@ai-sdk/openai";
 import { createAzure } from "@ai-sdk/azure";
 import { getServerEnv, looksConfigured } from "@/lib/server/env";
 
-let _provider: ReturnType<typeof createAzure> | null = null;
+/**
+ * Provider priority:
+ * 1. Direct OpenAI API (OPENAI_API_KEY) — GPT-5.2
+ * 2. Azure OpenAI (SOZO_OPENAI_*) — fallback
+ */
 
-function getProvider() {
-  if (_provider) return _provider;
+let _openai: ReturnType<typeof createOpenAI> | null = null;
+let _azure: ReturnType<typeof createAzure> | null = null;
+
+function getOpenAIProvider() {
+  if (_openai) return _openai;
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  _openai = createOpenAI({ apiKey });
+  return _openai;
+}
+
+function getAzureProvider() {
+  if (_azure) return _azure;
 
   const env = getServerEnv();
   if (!looksConfigured(env.openAiEndpoint) || !looksConfigured(env.openAiKey)) {
-    throw new Error(
-      "Azure OpenAI not configured. Set SOZO_OPENAI_ENDPOINT and SOZO_OPENAI_API_KEY.",
-    );
+    return null;
   }
 
-  _provider = createAzure({
+  _azure = createAzure({
     resourceName: extractResourceName(env.openAiEndpoint!),
     apiKey: env.openAiKey!,
   });
 
-  return _provider;
+  return _azure;
 }
 
 /** Extract resource name from endpoint URL (e.g., "https://foo.openai.azure.com" → "foo") */
@@ -32,22 +48,46 @@ function extractResourceName(endpoint: string): string {
   }
 }
 
-/** gpt-4o for reasoning, tool calling, and complex queries */
+/** Primary model — GPT-5.2 via OpenAI API, or Azure gpt-4o fallback */
 export function getReasoningModel() {
-  const env = getServerEnv();
-  const deployment = env.openAiReasoningDeployment ?? env.openAiDeployment;
-  if (!deployment) {
-    throw new Error("No OpenAI deployment configured.");
+  // 1. Try direct OpenAI API
+  const openai = getOpenAIProvider();
+  if (openai) {
+    const model = process.env.OPENAI_MODEL ?? "gpt-5.2";
+    return openai(model);
   }
-  return getProvider()(deployment);
+
+  // 2. Fall back to Azure OpenAI
+  const azure = getAzureProvider();
+  if (azure) {
+    const env = getServerEnv();
+    const deployment = env.openAiReasoningDeployment ?? env.openAiDeployment;
+    if (deployment) return azure(deployment);
+  }
+
+  throw new Error(
+    "No AI provider configured. Set OPENAI_API_KEY for OpenAI, or SOZO_OPENAI_ENDPOINT + SOZO_OPENAI_API_KEY for Azure.",
+  );
 }
 
-/** gpt-4o-mini for quick, low-cost queries */
+/** Quick model — GPT-5.2 via OpenAI API, or Azure gpt-4o-mini fallback */
 export function getQuickModel() {
-  const env = getServerEnv();
-  const deployment = env.openAiDeployment;
-  if (!deployment) {
-    throw new Error("No OpenAI deployment configured (SOZO_OPENAI_CHAT_DEPLOYMENT).");
+  // 1. Try direct OpenAI API
+  const openai = getOpenAIProvider();
+  if (openai) {
+    const model = process.env.OPENAI_MODEL ?? "gpt-5.2";
+    return openai(model);
   }
-  return getProvider()(deployment);
+
+  // 2. Fall back to Azure OpenAI
+  const azure = getAzureProvider();
+  if (azure) {
+    const env = getServerEnv();
+    const deployment = env.openAiDeployment;
+    if (deployment) return azure(deployment);
+  }
+
+  throw new Error(
+    "No AI provider configured. Set OPENAI_API_KEY for OpenAI, or SOZO_OPENAI_ENDPOINT + SOZO_OPENAI_API_KEY for Azure.",
+  );
 }

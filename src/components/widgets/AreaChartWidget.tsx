@@ -5,7 +5,7 @@ import { ChartContainer, ChartTooltip, ChartLegend, type ChartConfig } from "@/c
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
 import { pivotIfNeeded } from "./pivot-data";
 
-const DEFAULT_COLORS = ["#6f43ea", "#2f7ff6", "#17c6b8"];
+const DEFAULT_COLORS = ["#0693e3", "#9b51e0", "#17c6b8"];
 
 export function AreaChartWidget({ widget }: { widget: Widget }) {
   const { config } = widget;

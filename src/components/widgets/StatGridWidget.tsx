@@ -2,8 +2,6 @@
 
 import type { Widget } from "@/types/widget";
 
-const GRID_COLORS = ["#6f43ea", "#2f7ff6", "#17c6b8", "#f59e0b"];
-
 export function StatGridWidget({ widget }: { widget: Widget }) {
   const { config } = widget;
   const stats = config.stats ?? [];
@@ -18,8 +16,7 @@ export function StatGridWidget({ widget }: { widget: Widget }) {
     }}>
       {stats.map((stat, i) => {
         const arrow = stat.trend === "up" ? "\u25B2" : stat.trend === "down" ? "\u25BC" : "";
-        const trendColor = stat.trend === "up" ? "#10b981" : stat.trend === "down" ? "#ef4444" : "var(--text-muted)";
-        const accent = GRID_COLORS[i % GRID_COLORS.length];
+        const trendColor = stat.trend === "up" ? "var(--green)" : stat.trend === "down" ? "var(--red)" : "var(--text-muted)";
         const num = typeof stat.value === "number" ? stat.value : parseFloat(String(stat.value));
         let formatted: string;
         if (!isNaN(num)) {
@@ -38,30 +35,29 @@ export function StatGridWidget({ widget }: { widget: Widget }) {
 
         return (
           <div key={i} style={{
-            textAlign: "center", padding: "16px 10px", borderRadius: 14,
-            background: `linear-gradient(135deg, ${accent}08 0%, ${accent}04 100%)`,
-            border: `1px solid ${accent}18`,
-            transition: "transform 150ms ease, box-shadow 150ms ease",
+            textAlign: "center", padding: "16px 10px", borderRadius: "var(--r-md)",
+            background: "var(--app-bg)",
           }}>
             <div style={{
-              fontSize: "0.72rem", fontWeight: 600, color: "var(--text-muted)",
+              fontSize: "0.7rem", fontWeight: 500, color: "var(--text-muted)",
               marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em",
             }}>
               {stat.label}
             </div>
             <div style={{
-              fontSize: "1.6rem", fontWeight: 800, color: "var(--text-primary)",
-              lineHeight: 1.1, letterSpacing: "-0.02em",
+              fontSize: "1.5rem", fontWeight: 700,
+              background: "var(--accent-gradient)", WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              lineHeight: 1.1, letterSpacing: "-0.03em",
             }}>
               {formatted}
             </div>
             {arrow && (
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: 3,
-                fontSize: "0.72rem", fontWeight: 600, color: trendColor,
-                marginTop: 6,
+                fontSize: "0.72rem", fontWeight: 500, color: trendColor, marginTop: 6,
               }}>
-                <span style={{ fontSize: "0.6rem" }}>{arrow}</span>
+                <span style={{ fontSize: "0.55rem" }}>{arrow}</span>
                 {stat.trend}
               </div>
             )}

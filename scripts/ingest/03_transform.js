@@ -44,8 +44,9 @@ function amt(v) {
   if (v == null) return null;
   const n = parseFloat(String(v).replace(/[$,]/g, ''));
   if (isNaN(n)) return null;
-  const clamped = Math.max(-9999999999.99, Math.min(9999999999.99, n));
-  return Math.round(clamped * 100) / 100;
+  // Reject (not clamp) values outside reasonable nonprofit range
+  if (Math.abs(n) > 1000000) return null;
+  return Math.round(n * 100) / 100;
 }
 function dt(v) {
   if (v == null || v === '') return null;
