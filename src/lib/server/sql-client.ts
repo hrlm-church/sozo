@@ -1,90 +1,71 @@
+import sql from "mssql";
 import { getServerEnv, looksConfigured } from "@/lib/server/env";
 
 type SqlRow = Record<string, unknown>;
 
-type SqlDriver = {
-  connect: (config: Record<string, unknown>) => Promise<{
-    request: () => { query: (sql: string) => Promise<{ recordset: SqlRow[] }> };
-    close: () => Promise<void>;
-  }>;
-};
+let _pool: sql.ConnectionPool | null = null;
+let _poolPromise: Promise<sql.ConnectionPool> | null = null;
 
-const safeLoadMssql = async (): Promise<SqlDriver | null> => {
-  try {
-    const dynamicImport = new Function("name", "return import(name)") as (
-      name: string,
-    ) => Promise<unknown>;
-    const imported = (await dynamicImport("mssql")) as {
-      default?: unknown;
-      connect?: SqlDriver["connect"];
-    };
+function getPoolConfig(): sql.config {
+  const env = getServerEnv();
+  return {
+    server: env.sqlHost,
+    database: env.sqlDb,
+    user: env.sqlUser,
+    password: env.sqlPassword,
+    options: { encrypt: true, trustServerCertificate: false },
+    pool: { max: 5, min: 0, idleTimeoutMillis: 30000 },
+    connectionTimeout: 15000,
+    requestTimeout: 15000,
+  };
+}
 
-    const driver = (imported.default ?? imported) as SqlDriver;
-    if (typeof driver.connect !== "function") {
-      return null;
-    }
-    return driver;
-  } catch {
-    return null;
+/** Get or create the singleton connection pool */
+async function getPool(): Promise<sql.ConnectionPool> {
+  if (_pool?.connected) return _pool;
+
+  if (!_poolPromise) {
+    _poolPromise = sql.connect(getPoolConfig()).then((pool) => {
+      _pool = pool;
+      pool.on("error", () => {
+        _pool = null;
+        _poolPromise = null;
+      });
+      return pool;
+    });
   }
-};
+
+  return _poolPromise;
+}
 
 export const isSqlConfigured = () => {
   const env = getServerEnv();
   return looksConfigured(env.sqlUser) && looksConfigured(env.sqlPassword);
 };
 
-export const executeSql = async (sqlText: string): Promise<{ ok: boolean; reason?: string; rows: SqlRow[] }> => {
-  const env = getServerEnv();
-
+export const executeSql = async (
+  sqlText: string,
+  timeoutMs?: number,
+): Promise<{ ok: boolean; reason?: string; rows: SqlRow[] }> => {
   if (!isSqlConfigured()) {
     return {
       ok: false,
-      reason: "SOZO_SQL_USER and SOZO_SQL_PASSWORD are required for SQL query execution.",
+      reason: "SOZO_SQL_USER and SOZO_SQL_PASSWORD are required.",
       rows: [],
     };
   }
 
-  const mssql = await safeLoadMssql();
-  if (!mssql) {
-    return {
-      ok: false,
-      reason: "SQL driver unavailable in runtime (missing 'mssql' package).",
-      rows: [],
-    };
-  }
-
-  let pool: Awaited<ReturnType<typeof mssql.connect>> | null = null;
   try {
-    pool = await mssql.connect({
-      server: env.sqlHost,
-      database: env.sqlDb,
-      user: env.sqlUser,
-      password: env.sqlPassword,
-      options: {
-        encrypt: true,
-      },
-      pool: {
-        max: 2,
-        min: 0,
-        idleTimeoutMillis: 5000,
-      },
-    });
-
-    const result = await pool.request().query(sqlText);
-    return {
-      ok: true,
-      rows: result.recordset ?? [],
-    };
+    const pool = await getPool();
+    const request = pool.request();
+    if (timeoutMs) (request as unknown as { timeout: number }).timeout = timeoutMs;
+    const result = await request.query(sqlText);
+    return { ok: true, rows: result.recordset ?? [] };
   } catch (error) {
     return {
       ok: false,
       reason: error instanceof Error ? error.message : "Azure SQL query failed",
       rows: [],
     };
-  } finally {
-    if (pool) {
-      await pool.close();
-    }
   }
 };

@@ -1,190 +1,150 @@
-import { NextResponse } from "next/server";
-import { getDashboardSummary } from "@/lib/server/dashboard-summary";
-import { ChatMessage, runAzureOpenAiChat } from "@/lib/server/azure-openai";
-import { runSearchQuery } from "@/lib/server/search-query";
-import { runSqlQuery } from "@/lib/server/sql-query";
+import { streamText, stepCountIs, convertToModelMessages } from "ai";
+import type { UIMessage } from "ai";
+import { getReasoningModel } from "@/lib/server/ai-provider";
+import { getChatTools } from "@/lib/server/tools";
+import { SCHEMA_CONTEXT } from "@/lib/server/schema-context";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-type ToolRoute = "dashboard_summary" | "search" | "sql";
+const SYSTEM_PROMPT = `You are Sozo, a ministry intelligence assistant for Pure Freedom Ministries (True Girl brand).
+You help staff explore ALL their data — people, giving, commerce, events, engagement, households — and build beautiful, colorful interactive dashboards.
 
-interface ChatRequestBody {
-  messages?: ChatMessage[];
-  householdId?: string;
-  personId?: string;
-}
+## Your Capabilities
+1. **Query data** — Write SQL against the full database (query_data tool)
+2. **Show widgets** — Create rich, colorful visualizations inline (show_widget tool)
+3. **Build dashboards** — Compose multiple widgets the user can pin to their dashboard canvas
+4. **Explain insights** — Provide actionable analysis across all data domains
 
-const selectRoute = (latestUserMessage: string): { tool: ToolRoute; reason: string } => {
-  const normalized = latestUserMessage.toLowerCase();
+## IMPORTANT: People ≠ Donors
+The database contains ALL people — not just donors. People can be donors, customers, subscribers, event attendees, volunteers, contacts, or any combination. NEVER assume everyone is a "donor". Use accurate terms:
+- "people" or "individuals" for general counts
+- "donors" only when specifically filtering to people who have given
+- "customers" when talking about commerce/orders
+- "subscribers" when talking about subscriptions
+- "attendees" when talking about events
 
-  if (/\bsql\b/.test(normalized)) {
-    return {
-      tool: "sql",
-      reason: "Explicit SQL keyword detected",
-    };
-  }
+## Data Domains (you can query ALL of these)
+- **People** — 45K+ unified profiles across ALL roles (donors, customers, subscribers, attendees, contacts)
+- **Giving** — 67K+ donations, recurring plans, pledges, campaigns, funds
+- **Commerce** — 560K+ orders, subscriptions, invoices, payments, product purchases
+- **Events** — Event attendance, ticket purchases
+- **Engagement** — Communications, notes, tags, activities across all 7 source systems
+- **Households** — Family-level aggregates, health scores, giving trends
+- **Source Systems** — Bloomerang, Donor Direct, Givebutter, Keap, Kindful, Stripe, Transaction Imports
 
-  if (
-    /(dashboard|summary|kpi|metric|trend|risk|utilization|payment|household)/.test(
-      normalized,
-    )
-  ) {
-    return {
-      tool: "dashboard_summary",
-      reason: "Dashboard and KPI language detected",
-    };
-  }
+## Workflow
+When the user asks a data question:
+1. Use query_data to fetch the data (you can make PARALLEL calls for multiple queries)
+2. Use show_widget to visualize it — ALWAYS pass the query result rows in the "data" field for charts
+3. Add a brief text explanation with key insights
 
-  if (/(search|index|citation|document|source)/.test(normalized)) {
-    return {
-      tool: "search",
-      reason: "Search-oriented language detected",
-    };
-  }
+When the user asks to "build a dashboard" or "create a dashboard":
+1. Run multiple queries in parallel to gather diverse metrics
+2. Show 3-6 widgets of MIXED types (KPI + charts + table) for a rich dashboard experience
+3. The user can pin any widget to their canvas with the + button
 
-  return {
-    tool: "sql",
-    reason: "Defaulting to SQL route for structured data requests",
-  };
-};
+## Widget Types & When to Use Each
+- **kpi** — Single headline number (config.value, config.unit, config.trend). No data rows needed.
+- **stat_grid** — 2-4 related metrics in a grid (config.stats array). No data rows needed.
+- **bar_chart** — Comparing categories side by side. REQUIRES data rows + config.categoryKey + config.valueKeys.
+- **line_chart** — Trends over time. REQUIRES data rows + config.categoryKey + config.valueKeys.
+- **area_chart** — Volume/cumulative over time with gradient fill. REQUIRES data rows.
+- **donut_chart** — Proportions/shares of a whole. REQUIRES data rows + config.categoryKey + config.valueKeys.
+- **table** — Detailed multi-column data. REQUIRES data rows.
+- **drill_down_table** — Interactive expandable table. Click a row to expand details. REQUIRES data rows + config.groupKey.
+- **funnel** — Sequential stages (e.g., lifecycle pipeline). REQUIRES data rows in order.
+- **text** — Narrative insights via config.markdown.
 
-const fallbackAnswer = (tool: ToolRoute, latestPrompt: string, householdId?: string, personId?: string) => {
-  const scope = [personId ? `person=${personId}` : null, householdId ? `household=${householdId}` : null]
-    .filter(Boolean)
-    .join(", ");
+## CRITICAL: Passing Data to Charts
+For bar_chart, line_chart, area_chart, donut_chart, table, and funnel widgets:
+- You MUST pass the query result rows in the "data" field
+- Set "categoryKey" to the label/category column name
+- Set "valueKeys" to an array of the numeric column names
+Example: data=[{month:"Jan",amount:5000},{month:"Feb",amount:7200}], config={categoryKey:"month",valueKeys:["amount"]}
 
-  const scopeText = scope ? ` Scope: ${scope}.` : "";
+## seriesKey — Multi-Series Charts from Long-Format Data
+When query returns rows like [{name:"Alice",month:"Jan",amount:100},{name:"Bob",month:"Jan",amount:200}],
+use seriesKey to auto-pivot into separate lines/bars per person:
+  config={categoryKey:"month", valueKeys:["amount"], seriesKey:"display_name"}
+This creates one line/bar per unique display_name value. Colors are assigned automatically.
+ALWAYS use seriesKey when charting per-person, per-fund, per-category breakdowns over time.
 
-  if (tool === "dashboard_summary") {
-    return `Dashboard summary prepared for: \"${latestPrompt}\".${scopeText}`;
-  }
-  if (tool === "search") {
-    return `Azure Search results prepared for: \"${latestPrompt}\".${scopeText}`;
-  }
-  return `Azure SQL results prepared for: \"${latestPrompt}\".${scopeText}`;
-};
+## drill_down_table — Interactive Expandable Reports
+For reports where user wants to click a name/category and see details expand:
+- Pass ALL detail rows (e.g., each donor's monthly donations)
+- Set groupKey to the grouping column (e.g., "display_name")
+- Optionally set detailColumns to control which columns show when expanded
+- Summary rows are auto-computed (sums of numeric columns + row count)
+- Example: Top donors with monthly drill-down:
+  Query: all monthly donation rows for top 20 donors
+  config={groupKey:"display_name", detailColumns:["donation_month","amount","fund","payment_method"]}
+ALWAYS use drill_down_table when the user asks for "expandable", "drill-down", "click to expand", or "interactive report".
+
+For kpi and stat_grid widgets:
+- Pass data=[] (empty). Put values directly in config.
+
+## Color Palette — Use These for Vibrant Dashboards
+Always specify colors in config.colors to make dashboards vibrant and branded:
+- Purple (brand):  "#6f43ea", "#8b5cf6", "#a78bfa"
+- Blue:            "#2f7ff6", "#3b82f6", "#60a5fa"
+- Teal:            "#17c6b8", "#14b8a6", "#2dd4bf"
+- Amber:           "#f59e0b", "#fbbf24", "#fcd34d"
+- Rose:            "#f43f5e", "#fb7185", "#fda4af"
+- Green:           "#10b981", "#34d399", "#6ee7b7"
+- Pink:            "#ec4899", "#f472b6", "#f9a8d4"
+- Orange:          "#f97316", "#fb923c", "#fdba74"
+
+For stat_grid trends: use trend="up" (green arrow), trend="down" (red arrow), trend="flat".
+For KPI: use numberFormat="currency" for dollar amounts.
+
+## Rules
+- Be concise and factual — let the widgets do the talking
+- Use actual data from queries, never fabricate numbers
+- For dollar amounts, format with $ and commas
+- Always include the SQL query in the widget (sql field) for transparency
+- If a query fails, explain the error and suggest alternatives
+- Never expose individual emails/phones — aggregate, don't list PII
+- When building dashboards, aim for visual VARIETY: mix KPIs, charts, and tables
+- Prefer bright, distinct colors per series — avoid monochrome charts
+
+${SCHEMA_CONTEXT}
+`;
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as ChatRequestBody;
-    const messages = body.messages ?? [];
-    const latestUserMessage = [...messages]
-      .reverse()
-      .find((message) => message.role === "user")?.content;
+    const body = await request.json();
+    const uiMessages = body.messages as UIMessage[] | undefined;
 
-    if (!latestUserMessage) {
-      return NextResponse.json(
-        {
-          error: "Provide at least one user message in messages[].",
-        },
-        { status: 400 },
+    if (!uiMessages || !Array.isArray(uiMessages) || uiMessages.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Provide at least one message." }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
       );
     }
 
-    const route = selectRoute(latestUserMessage);
-    const summary = await getDashboardSummary();
+    const model = getReasoningModel();
+    const tools = getChatTools();
 
-    const searchResult = route.tool === "search" ? await runSearchQuery(latestUserMessage) : null;
-    const sqlResult = route.tool === "sql" ? await runSqlQuery(latestUserMessage) : null;
+    const modelMessages = await convertToModelMessages(uiMessages);
 
-    const routeCitations =
-      route.tool === "dashboard_summary"
-        ? summary.citations
-        : route.tool === "search"
-          ? searchResult?.citations ?? []
-          : sqlResult?.citations ?? [];
-
-    const routeTables =
-      route.tool === "dashboard_summary"
-        ? summary.tables
-        : route.tool === "search"
-          ? searchResult?.table
-            ? [searchResult.table]
-            : []
-          : sqlResult?.table
-            ? [sqlResult.table]
-            : [];
-
-    const systemPrompt: ChatMessage = {
-      role: "system",
-      content:
-        "You are Sozo, a person/household-centric assistant. Keep answers concise and factual. If tool results are provided and marked ok=true, you must answer from those results and must not say you cannot access/search/query data. If tool results are not available, clearly state the specific missing dependency.",
-    };
-
-    const contextPrompt: ChatMessage = {
-      role: "system",
-      content: JSON.stringify(
-        {
-          toolRoute: route,
-          dashboardSummary:
-            route.tool === "dashboard_summary"
-              ? {
-                  metrics: summary.metrics,
-                  citations: summary.citations,
-                }
-              : undefined,
-          searchResult:
-            route.tool === "search"
-              ? {
-                  ok: searchResult?.ok ?? false,
-                  reason: searchResult?.reason,
-                  indexName: searchResult?.indexName,
-                  citations: searchResult?.citations ?? [],
-                  table: searchResult?.table,
-                }
-              : undefined,
-          sqlResult:
-            route.tool === "sql"
-              ? {
-                  ok: sqlResult?.ok ?? false,
-                  reason: sqlResult?.reason,
-                  query: sqlResult?.query,
-                  citations: sqlResult?.citations ?? [],
-                  table: sqlResult?.table,
-                }
-              : undefined,
-          requestScope: {
-            personId: body.personId,
-            householdId: body.householdId,
-          },
-        },
-        null,
-        2,
-      ),
-    };
-
-    const modelResult = await runAzureOpenAiChat([systemPrompt, contextPrompt, ...messages]);
-
-    return NextResponse.json({
-      answer:
-        modelResult.ok && modelResult.content
-          ? modelResult.content
-          : fallbackAnswer(route.tool, latestUserMessage, body.householdId, body.personId),
-      citations: routeCitations,
-      artifacts: {
-        charts: route.tool === "dashboard_summary" ? summary.charts : [],
-        tables: routeTables,
-      },
-      route,
-      meta: {
-        usedModel: modelResult.ok,
-        model: modelResult.model,
-        modelError: modelResult.ok ? undefined : modelResult.error,
-        toolStatus:
-          route.tool === "search"
-            ? { ok: searchResult?.ok ?? false, reason: searchResult?.reason }
-            : route.tool === "sql"
-              ? { ok: sqlResult?.ok ?? false, reason: sqlResult?.reason }
-              : { ok: true },
-      },
-      timestamp: new Date().toISOString(),
+    const result = streamText({
+      model,
+      system: SYSTEM_PROMPT,
+      messages: modelMessages,
+      tools,
+      stopWhen: stepCountIs(8),
+      temperature: 0.2,
     });
+
+    return result.toUIMessageStreamResponse();
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Unexpected chat error",
-      },
-      { status: 500 },
+    return new Response(
+      JSON.stringify({
+        error:
+          error instanceof Error ? error.message : "Unexpected chat error",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
 }

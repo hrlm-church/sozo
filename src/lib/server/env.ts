@@ -26,6 +26,7 @@ export interface SozoServerEnv {
   openAiEndpoint?: string;
   openAiKey?: string;
   openAiDeployment?: string;
+  openAiReasoningDeployment?: string;
   openAiApiVersion: string;
 }
 
@@ -64,6 +65,8 @@ export const getServerEnv = (): SozoServerEnv => {
     openAiDeployment:
       value("SOZO_OPENAI_CHAT_DEPLOYMENT") ??
       value("AZURE_OPENAI_CHAT_DEPLOYMENT"),
+    openAiReasoningDeployment:
+      value("SOZO_OPENAI_REASONING_DEPLOYMENT"),
     openAiApiVersion:
       value("SOZO_OPENAI_API_VERSION") ??
       value("AZURE_OPENAI_API_VERSION") ??

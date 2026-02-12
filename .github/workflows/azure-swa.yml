@@ -1,0 +1,58 @@
+name: Deploy to Azure Static Web Apps
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+
+jobs:
+  build_and_deploy:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    name: Build and Deploy
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          # Required build-time env vars (non-secret defaults for SSG)
+          SOZO_AZURE_RESOURCE_GROUP: ${{ secrets.SOZO_AZURE_RESOURCE_GROUP }}
+          SOZO_AZURE_LOCATION: ${{ secrets.SOZO_AZURE_LOCATION }}
+          SOZO_STORAGE_ACCOUNT: ${{ secrets.SOZO_STORAGE_ACCOUNT }}
+          SOZO_SERVICEBUS_NAMESPACE: ${{ secrets.SOZO_SERVICEBUS_NAMESPACE }}
+          SOZO_SQL_HOST: ${{ secrets.SOZO_SQL_HOST }}
+          SOZO_SQL_DB: ${{ secrets.SOZO_SQL_DB }}
+          SOZO_SEARCH_SERVICE_NAME: ${{ secrets.SOZO_SEARCH_SERVICE_NAME }}
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: /
+          output_location: .next
+          skip_app_build: true
+
+  close_pull_request:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close PR Environment
+    steps:
+      - name: Close staging environment
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: close

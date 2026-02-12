@@ -1,0 +1,30 @@
+{
+  "version": "v1",
+  "generated_at": "2026-02-09T00:00:00Z",
+  "groups": [
+    "identity_profile",
+    "demographics_household",
+    "contact_channel",
+    "consent_privacy",
+    "fundraising_giving",
+    "recurring_commitment",
+    "commerce_orders",
+    "billing_invoicing",
+    "payments_financial_events",
+    "subscription_box_lifecycle",
+    "event_ticketing_attendance",
+    "campaign_marketing",
+    "engagement_behavior",
+    "journey_automation",
+    "content_interest_topic",
+    "support_service",
+    "relationship_affiliation",
+    "identity_resolution_quality",
+    "system_ingestion_lineage",
+    "data_quality_anomaly",
+    "predictive_scores_segments",
+    "experimental_holdout",
+    "manual_curated_flags",
+    "unknown_unmapped"
+  ]
+}

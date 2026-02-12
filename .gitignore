@@ -34,6 +34,10 @@ yarn-error.log*
 .env*
 !.env.example
 
+# sample/raw data (large CSVs, PII)
+/data/samples/
+/reports/
+
 # vercel
 .vercel
 

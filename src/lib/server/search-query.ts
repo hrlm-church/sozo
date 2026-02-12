@@ -1,5 +1,17 @@
 import { getServerEnv, looksConfigured } from "@/lib/server/env";
-import type { Citation, TableArtifact } from "@/lib/server/dashboard-summary";
+
+interface Citation {
+  title: string;
+  source: string;
+  snippet: string;
+}
+
+interface TableArtifact {
+  id: string;
+  title: string;
+  columns: string[];
+  rows: string[][];
+}
 
 interface SearchDoc {
   [key: string]: unknown;
