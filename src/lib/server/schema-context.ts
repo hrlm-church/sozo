@@ -22,7 +22,7 @@ tag_group: 'Donor Assignment','True Girl','B2BB','Nurture Tags','True Production
 serving.order_detail (205K) — order_id, person_id, display_name, total_amount, order_date, order_month, order_status
 serving.payment_detail (135K) — payment_id, person_id, display_name, amount, payment_date, payment_month, payment_method
 serving.invoice_detail (205K) — invoice_id, person_id, display_name, invoice_total, invoice_status, issued_at, invoice_month
-serving.subscription_detail (6K) — person_id, display_name, product_name, amount, cadence, subscription_status ('Active':46, 'Inactive':6.3K)
+serving.subscription_detail (6K) — person_id, display_name, product_name, amount, cadence, subscription_status ('Active':41, 'Inactive':6.3K)
 serving.household_360 (55K) — household_id, name, member_count, household_giving_total, giving_trend
 serving.communication_detail (24K) — person_id, display_name, channel, direction, subject, sent_at
 

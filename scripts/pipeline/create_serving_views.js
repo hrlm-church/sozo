@@ -39,7 +39,7 @@ const VIEWS = [
       (SELECT COUNT(DISTINCT im2.source_system) FROM silver.identity_map im2 WHERE im2.master_id = im.master_id) AS source_count,
       (SELECT STRING_AGG(ss, ', ') FROM (SELECT DISTINCT im2.source_system AS ss FROM silver.identity_map im2 WHERE im2.master_id = im.master_id) x) AS source_systems,
 
-      -- Giving aggregates
+      -- Giving aggregates (from deduplicated serving.donation_detail)
       ISNULL(g.donation_count, 0) AS donation_count,
       ISNULL(g.lifetime_giving, 0) AS lifetime_giving,
       g.avg_gift, g.largest_gift,
@@ -71,14 +71,13 @@ const VIEWS = [
     FROM silver.identity_map im
     JOIN silver.contact c ON c.contact_id = im.contact_id
     LEFT JOIN (
-      SELECT im2.master_id,
-        COUNT(*) AS donation_count, SUM(d.amount) AS lifetime_giving,
-        AVG(d.amount) AS avg_gift, MAX(d.amount) AS largest_gift,
-        MIN(d.donated_at) AS first_gift_date, MAX(d.donated_at) AS last_gift_date
-      FROM silver.donation d
-      JOIN silver.identity_map im2 ON im2.source_system = d.source_system AND im2.source_id = d.contact_source_id
-      WHERE d.amount > 0
-      GROUP BY im2.master_id
+      SELECT person_id AS master_id,
+        COUNT(*) AS donation_count, SUM(amount) AS lifetime_giving,
+        AVG(amount) AS avg_gift, MAX(amount) AS largest_gift,
+        MIN(donated_at) AS first_gift_date, MAX(donated_at) AS last_gift_date
+      FROM serving.donation_detail
+      WHERE amount > 0
+      GROUP BY person_id
     ) g ON g.master_id = im.master_id
     LEFT JOIN (
       SELECT im2.master_id, COUNT(DISTINCT o.keap_id) AS order_count,
@@ -128,12 +127,11 @@ const VIEWS = [
     FROM silver.identity_map im
     JOIN silver.contact c ON c.contact_id = im.contact_id
     LEFT JOIN (
-      SELECT im2.master_id, SUM(d.amount) AS total_given,
-        MIN(d.donated_at) AS first_gift_date, MAX(d.donated_at) AS last_gift_date
-      FROM silver.donation d
-      JOIN silver.identity_map im2 ON im2.source_system = d.source_system AND im2.source_id = d.contact_source_id
-      WHERE d.amount > 0
-      GROUP BY im2.master_id
+      SELECT person_id AS master_id, SUM(amount) AS total_given,
+        MIN(donated_at) AS first_gift_date, MAX(donated_at) AS last_gift_date
+      FROM serving.donation_detail
+      WHERE amount > 0
+      GROUP BY person_id
     ) g ON g.master_id = im.master_id
     WHERE im.is_primary = 1
       AND (c.household_name IS NOT NULL OR c.last_name IS NOT NULL)

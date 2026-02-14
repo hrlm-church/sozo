@@ -33,7 +33,7 @@
 | **Total Contacts** | 84,507 across 55,625 households | Healthy database size |
 | **Email Coverage** | 81,650 (96.6%) | Excellent |
 | **Phone Coverage** | 44,976 (53.2%) | Needs improvement |
-| **Lifetime Giving** | $7.1M from 5,030 donors | Growing per-donor, shrinking base |
+| **Lifetime Giving** | $6.7M from 5,037 donors | Growing per-donor, shrinking base |
 | **Commerce Revenue** | $4.7M lifetime from 33,694 buyers | Strong product engagement |
 | **Subscription Box** | 41 active of 6,337 total (0.6%) | Critical failure |
 | **Active Donors** | 369 (0.4% of contacts) | Emergency-level low |
@@ -44,7 +44,7 @@
 
 ```
 TOTAL IDENTIFIED REVENUE STREAMS
-├── Donations:       $7.1M lifetime (5,030 donors)
+├── Donations:       $6.7M lifetime (5,037 donors)
 ├── Commerce:        $4.7M lifetime (33,694 buyers)
 ├── Subscriptions:   $475K lifetime (6,337 subscribers, mostly churned)
 ├── Stripe Direct:   $2.0M (6,766 customers, 3,474 unlinked)
@@ -56,13 +56,13 @@ TOTAL IDENTIFIED REVENUE STREAMS
 ```
                     ┌─────────┐
                     │  Active  │  369 people (0.4%)
-                    │ Donors   │  $4.9M giving
+                    │ Donors   │  $2.25M giving
                    ┌┴─────────┴┐
                    │  Cooling   │  420 people (0.5%)
-                   │  Donors    │  $4.6M giving ← HIGHEST RISK
+                   │  Donors    │  $2.27M giving ← HIGHEST RISK
                   ┌┴───────────┴┐
                   │ Lapsed/Lost  │  4,248 people (5%)
-                  │   Donors     │  $4.1M giving
+                  │   Donors     │  $2.04M giving
                  ┌┴─────────────┴┐
                  │  Buyer Only    │  27,533 people (33%)
                  │  (never gave)  │  $2.4M commerce ← BIGGEST OPPORTUNITY
@@ -85,18 +85,18 @@ Year-over-year donor retention dropped from **74.1% (2020) to 33.3% (2024)**. Th
 Annual giving grew from $621K (2020) to $1.41M (2024) — a 127% increase. But this growth came from **fewer donors giving larger gifts**, not from broadening the base. Average gift tripled from $62 to $193. The organization is building a taller building on a narrower foundation. One major donor loss could collapse annual revenue by 10-15%.
 
 **Insight #3: 6 of the Top 10 Donors Are At Risk**
-Of the 10 largest lifetime donors ($197K-$1.6M each):
-- **4 are Active** (Whitman, Johnson, Nicholson, Laskin)
-- **5 are Cooling** (Lampe $1.6M, Fletcher $766K, Stober $451K, Cohen $246K, Jones $220K)
-- **1 is Lapsed** (Barker $470K)
+Of the 10 largest lifetime donors ($99K-$795K each):
+- **4 are Active** (Whitman $287K, Johnson $122K, Nicholson $102K, Laskin $99K)
+- **5 are Cooling** (Lampe $795K, Fletcher $383K, Stober $226K, Cohen $123K, Jones $122K)
+- **1 is Lapsed** (Barker $203K)
 
-The five cooling donors represent **$3.3M in lifetime giving** and haven't given in 200-323 days. Cheryl Lampe alone, the #1 donor at $1.6M lifetime, is cooling with 200 days since last gift. This requires immediate personal intervention.
+The five cooling donors represent **$1.65M in lifetime giving** and haven't given in 200-323 days. Cheryl Lampe alone, the #1 donor at $795K lifetime, is cooling with 200 days since last gift. This requires immediate personal intervention.
 
-**Insight #4: 128 Households Fund 74% of All Giving**
-Of 55,625 households, only 128 ($10K+ giving) account for **$10.2M — 74% of total giving**. Meanwhile, 50,633 households (91%) have given $0. This extreme concentration means the organization's financial health depends on relationships with roughly 100 families.
+**Insight #4: 78 Households Fund 68% of All Giving**
+Of 55,625 households, only 78 ($10K+ giving) account for **$4.59M — 68% of total household giving**. Meanwhile, 50,633 households (91%) have given $0. This extreme concentration means the organization's financial health depends on relationships with fewer than 80 families.
 
 **Insight #5: December Dependence Is a Structural Vulnerability**
-December generates **25% of annual giving** ($1.67M lifetime, $492K in Dec 2024 alone). November-December combined = 34%. A failed year-end campaign would be catastrophic. The organization needs to build mid-year giving peaks through events, campaigns, and recurring giving.
+December generates **25% of annual giving** ($492K in Dec 2024 alone). November-December combined = 34%. A failed year-end campaign would be catastrophic. The organization needs to build mid-year giving peaks through events, campaigns, and recurring giving.
 
 **Insight #6: New Donor Acquisition Has Stalled**
 The donor base peaked at 2,293 unique donors in 2022, driven by an influx of new donors (likely from Givebutter/digital campaigns). By 2024, only 1,723 unique donors remained. New donor acquisition declined from a high of ~1,300/year (2022) to significantly fewer. The pipeline needs rebuilding.
@@ -258,13 +258,13 @@ Compare to the same period in 2024: Aug $63K, Sep $51K, Oct $110K. This is a **7
 
 | Risk | Severity | Likelihood | Impact | Mitigation |
 |------|----------|------------|--------|------------|
-| Top donor attrition (5 of 10 cooling) | **CRITICAL** | High | -$3.3M lifetime value | Immediate personal outreach |
+| Top donor attrition (5 of 10 cooling) | **CRITICAL** | High | -$1.65M lifetime value | Immediate personal outreach |
 | Donor retention below 35% | **CRITICAL** | Occurring now | Base erosion, revenue fragility | Retention program overhaul |
 | December dependence (25% of annual) | **HIGH** | Structural | Catastrophic if EOY fails | Build mid-year giving peaks |
 | Subscription box collapse | **HIGH** | Already occurred | -$461K/year revenue | Relaunch with new platform |
 | New donor acquisition declining | **HIGH** | Trending | Shrinking future pipeline | Tour→donor funnel, digital asks |
 | 2025 Q3-Q4 giving cliff | **CRITICAL** | Possible data lag | Unknown | Verify data, investigate |
-| Concentrated giving (128 HH = 74%) | **HIGH** | Structural | Single-point-of-failure | Broaden mid-level program |
+| Concentrated giving (78 HH = 68%) | **HIGH** | Structural | Single-point-of-failure | Broaden mid-level program |
 | Unlinked Stripe customers ($1.27M) | **MEDIUM** | Ongoing | Lost relationships | Email matching project |
 | No major gift program | **HIGH** | Structural | $50M+ capacity unused | Hire/assign MGO |
 
@@ -430,7 +430,7 @@ Compare to the same period in 2024: Aug $63K, Sep $51K, Oct $110K. This is a **7
 
 | KPI | Current | Target |
 |-----|---------|--------|
-| Revenue per contact | $84 | $120 |
+| Revenue per contact | $80 | $120 |
 | Donor acquisition cost | Unknown | Establish baseline |
 | Lifetime value (new donor cohort) | $44 first gift | Track 2-year trajectory |
 | Commerce-to-donor conversion rate | 0% tracked | 5% |
@@ -448,14 +448,14 @@ Pure Freedom Ministries has built an extraordinary audience of **84,507 engaged 
 Only 6% of contacts have ever donated. Only 0.4% are active donors. The organization has mastered audience building through content, tours, and digital marketing — but has not built the bridge from "engaged follower" to "financial partner."
 
 The three highest-leverage actions are:
-1. **Stop the bleeding** — Personal intervention with the 5 cooling top-10 donors ($3.3M at risk) and systematic retention overhaul
+1. **Stop the bleeding** — Personal intervention with the 5 cooling top-10 donors ($1.65M at risk) and systematic retention overhaul
 2. **Build the bridge** — Commerce-to-donor conversion engine targeting 29,220 non-donor buyers
 3. **Go deeper** — Major gift program leveraging $50M+ in untapped wealth capacity
 
-If these three strategies are executed well, the ministry can realistically grow from **$1.4M/year in giving** (2024) to **$2.5M-$3M/year within 24 months** — while reducing concentration risk and building a more sustainable financial foundation.
+If these three strategies are executed well, the ministry can realistically grow from **$1.4M/year in giving** (2024) to **$2.0M-$2.5M/year within 24 months** — while reducing concentration risk and building a more sustainable financial foundation.
 
 The data is here. The audience is here. The capacity is here. What's needed is the strategic bridge between engagement and generosity.
 
 ---
 
-*This assessment was generated by the Sozo Intelligence Platform analyzing 3.7M+ data points across 14 unified serving tables from 7 source systems. All figures verified against materialized data as of February 2025.*
+*This assessment was generated by the Sozo Intelligence Platform analyzing 3.7M+ data points across 14 unified serving tables from 7 source systems. All figures verified against deduplicated, materialized data as of February 2025. Silver.donation deduplication removed 67,342 duplicate rows (givebutter 30x, kindful 4x, keap_import 3x). Serving.person_360 and household_360 rebuilt from deduplicated donation_detail to ensure accuracy.*
