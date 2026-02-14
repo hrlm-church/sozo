@@ -57,7 +57,7 @@ const BLOCKED_PATTERNS = [
 ];
 
 const MAX_ROWS = 500;
-const QUERY_TIMEOUT_MS = 30_000;
+const QUERY_TIMEOUT_MS = 90_000;
 
 export interface GuardResult {
   ok: boolean;
