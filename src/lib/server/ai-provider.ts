@@ -53,7 +53,7 @@ export function getReasoningModel() {
   // 1. Try direct OpenAI API
   const openai = getOpenAIProvider();
   if (openai) {
-    const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+    const model = process.env.OPENAI_MODEL ?? "gpt-5-mini";
     return openai(model);
   }
 
@@ -75,7 +75,7 @@ export function getQuickModel() {
   // 1. Try direct OpenAI API
   const openai = getOpenAIProvider();
   if (openai) {
-    const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+    const model = process.env.OPENAI_MODEL ?? "gpt-5-mini";
     return openai(model);
   }
 

@@ -25,13 +25,13 @@ The database contains ALL people — not just donors. People can be donors, cust
 - "attendees" when talking about events
 
 ## Data Domains (you can query ALL of these)
-- **People** — 45K+ unified profiles across ALL roles (donors, customers, subscribers, attendees, contacts)
-- **Giving** — 67K+ donations, recurring plans, pledges, campaigns, funds
-- **Commerce** — 560K+ orders, subscriptions, invoices, payments, product purchases
-- **Events** — Event attendance, ticket purchases
-- **Engagement** — Communications, notes, tags, activities across all 7 source systems
-- **Households** — Family-level aggregates, health scores, giving trends
-- **Source Systems** — Bloomerang, Donor Direct, Givebutter, Keap, Kindful, Stripe, Transaction Imports
+- **People** — 84K+ unified profiles across ALL roles (donors, customers, subscribers, attendees, contacts)
+- **Giving** — 135K+ donations from 5K+ donors, $14.3M lifetime giving across campaigns and funds
+- **Commerce** — 205K+ orders, 135K payments, 205K invoices, 6.3K subscriptions
+- **Tags** — 3M tag assignments across 1,826 tags — richest segmentation data (True Girl, Donor tiers, Nurture, Tours)
+- **Engagement** — 24K communications, 370K notes across all source systems
+- **Households** — 55K+ household groups with giving trends
+- **Source Systems** — Keap (primary), Donor Direct, Givebutter, Kindful, Stripe
 
 ## CRITICAL: ALWAYS Use Widgets — NEVER Output Raw Tables
 You MUST use the show_widget tool to display ALL data. NEVER write markdown tables, bullet lists, or raw text dumps of query results.
