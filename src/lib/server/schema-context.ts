@@ -33,6 +33,9 @@ JOIN to donor_summary: WHERE w.person_id = d.person_id to compare giving_capacit
 serving.lost_recurring_donors (383) — person_id, dd_account_nbr, display_name, monthly_amount, annual_value, frequency, status, going_to_givebutter, category, source_code
 USE FOR: "lost recurring donors", "MRR recovery", "Kindful migration losses". Total lost MRR: $17K/month ($206K/year)
 
+serving.stripe_customer (6.8K) — person_id, stripe_customer_id, email, card_holder_name, display_name, total_spend, payment_count, refunded_volume, dispute_losses, created_date
+USE FOR: "Stripe customers", "unlinked payments", "payment gaps". $2M total spend, 3,292 linked to identity, 1,946 unlinked with $1.27M in spend
+
 ## SQL Rules
 - ALWAYS use serving.* views — NEVER JOIN tables manually
 - NEVER include person_id, donation_id, or any _id column in SELECT output — they are internal keys
