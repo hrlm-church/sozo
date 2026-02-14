@@ -15,6 +15,8 @@ const ALLOWED_TABLES = new Set([
   "serving.communication_detail",
   "serving.donor_summary",
   "serving.donor_monthly",
+  "serving.wealth_screening",
+  "serving.lost_recurring_donors",
   // Silver layer (typed, cleaned tables)
   "silver.contact",
   "silver.donation",

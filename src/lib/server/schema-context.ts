@@ -26,6 +26,13 @@ serving.subscription_detail (6K) — person_id, display_name, product_name, amou
 serving.household_360 (55K) — household_id, name, member_count, household_giving_total, giving_trend
 serving.communication_detail (24K) — person_id, display_name, channel, direction, subject, sent_at
 
+serving.wealth_screening (1.1K) — person_id, keap_id, display_name, email, giving_capacity (dollars), capacity_tier (letter A-L), capacity_min, capacity_max, capacity_label ('Ultra High ($250K+)':29, 'Very High ($100K-$250K)':114, 'High ($25K-$100K)':391, 'Medium ($10K-$25K)':178, 'Standard':397), prospect_rating, quality_score, real_estate_value
+USE FOR: "donor capacity", "wealth screening", "giving below capacity", "major gift prospects"
+JOIN to donor_summary: WHERE w.person_id = d.person_id to compare giving_capacity vs total_given
+
+serving.lost_recurring_donors (383) — person_id, dd_account_nbr, display_name, monthly_amount, annual_value, frequency, status, going_to_givebutter, category, source_code
+USE FOR: "lost recurring donors", "MRR recovery", "Kindful migration losses". Total lost MRR: $17K/month ($206K/year)
+
 ## SQL Rules
 - ALWAYS use serving.* views — NEVER JOIN tables manually
 - NEVER include person_id, donation_id, or any _id column in SELECT output — they are internal keys
