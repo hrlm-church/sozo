@@ -56,17 +56,29 @@ function lit(val) {
 
 function normalizeEmail(e) {
   if (!e || !String(e).trim()) return null;
-  return String(e).toLowerCase().trim();
+  const v = String(e).toLowerCase().trim();
+  // Reject literal "null", "undefined", or clearly invalid values
+  if (v === 'null' || v === 'undefined' || v === 'none' || v === 'n/a') return null;
+  if (!v.includes('@')) return null;
+  return v;
 }
 
 function normalizePhone(p) {
   if (!p || !String(p).trim()) return null;
-  const digits = String(p).replace(/\D/g, '');
+  const raw = String(p).trim();
+  // Reject garbage: URLs, addresses, multi-field data leaking into phone columns
+  if (raw.includes('http') || raw.includes('www.')) return null;
+  if (raw.includes(',') || raw.includes('|')) return null;     // CSV leakage
+  if (/[a-zA-Z]{3,}/.test(raw)) return null;                   // contains 3+ letters = not a phone
+  const digits = raw.replace(/\D/g, '');
   if (digits.length === 11 && digits[0] === '1') return digits.slice(1);
   if (digits.length === 10) return digits;
-  if (digits.length >= 7) return digits;
+  if (digits.length >= 7 && digits.length <= 11) return digits; // cap at 11 digits
   return null;
 }
+
+// Max records per identity group — prevents transitive chain mega-groups
+const MAX_GROUP_SIZE = 20;
 
 function formatPhone(digits) {
   if (!digits) return null;
@@ -187,9 +199,10 @@ async function main() {
     // Group records by connected emails (union-find)
     const resolved = new Set();  // indices of resolved records
     const personGroups = [];     // [{personId, records: [idx...], emails: Set, phones: Set}]
+    const idxToGroup = new Map(); // fast lookup: record index → person group
 
     // Process email groups: merge records that share any email
-    const visited = new Set();
+    let cappedSkips = 0;
     for (const [email, indices] of Object.entries(emailIndex)) {
       // Find all unresolved records in this email group
       const unresolved = indices.filter(i => !resolved.has(i));
@@ -198,20 +211,24 @@ async function main() {
       // Check if any of these records are already in a person group
       let existingGroup = null;
       for (const idx of unresolved) {
-        for (const pg of personGroups) {
-          if (pg.recordIndices.has(idx)) {
-            existingGroup = pg;
-            break;
-          }
+        if (idxToGroup.has(idx)) {
+          existingGroup = idxToGroup.get(idx);
+          break;
         }
-        if (existingGroup) break;
       }
 
       if (existingGroup) {
-        // Add new records to existing group
+        // Skip if group already at max size — prevents transitive mega-chains
+        if (existingGroup.recordIndices.size >= MAX_GROUP_SIZE) {
+          cappedSkips += unresolved.filter(i => !existingGroup.recordIndices.has(i)).length;
+          continue;
+        }
+        // Add new records to existing group (up to cap)
         for (const idx of unresolved) {
+          if (existingGroup.recordIndices.size >= MAX_GROUP_SIZE) { cappedSkips++; continue; }
           if (!existingGroup.recordIndices.has(idx)) {
             existingGroup.recordIndices.add(idx);
+            idxToGroup.set(idx, existingGroup);
             resolved.add(idx);
             // Add this record's emails/phones to the group
             const r = allRecords[idx];
@@ -236,7 +253,9 @@ async function main() {
           matchMethod: 'email'
         };
         for (const idx of unresolved) {
+          if (group.recordIndices.size >= MAX_GROUP_SIZE) { cappedSkips++; continue; }
           group.recordIndices.add(idx);
+          idxToGroup.set(idx, group);
           resolved.add(idx);
           const r = allRecords[idx];
           for (const e of [r.email, r.email2, r.email3]) {
@@ -251,7 +270,7 @@ async function main() {
         personGroups.push(group);
       }
     }
-    console.log(`  Pass 1: ${personGroups.length.toLocaleString()} persons from email match (${resolved.size.toLocaleString()} records resolved)`);
+    console.log(`  Pass 1: ${personGroups.length.toLocaleString()} persons from email match (${resolved.size.toLocaleString()} records resolved, ${cappedSkips.toLocaleString()} capped)`);
 
     // ═══════════════════════════════════════════════════════════════════════
     // [3] PASS 2: Phone dedup (confidence 0.95)
@@ -282,6 +301,7 @@ async function main() {
 
     let phoneMerged = 0;
     let phoneNew = 0;
+    let phoneCapped = 0;
 
     for (const [phone, indices] of Object.entries(phoneIndex)) {
       const unresolved = indices.filter(i => !resolved.has(i));
@@ -290,8 +310,11 @@ async function main() {
       // Check if this phone already belongs to a pass-1 person
       if (phoneToGroup[phone]) {
         const group = phoneToGroup[phone];
+        if (group.recordIndices.size >= MAX_GROUP_SIZE) { phoneCapped += unresolved.length; continue; }
         for (const idx of unresolved) {
+          if (group.recordIndices.size >= MAX_GROUP_SIZE) { phoneCapped++; continue; }
           group.recordIndices.add(idx);
+          idxToGroup.set(idx, group);
           resolved.add(idx);
           const r = allRecords[idx];
           for (const e of [r.email, r.email2, r.email3]) {
@@ -301,22 +324,22 @@ async function main() {
         }
         phoneMerged += unresolved.length;
       } else {
-        // Check if any of these records already in a phone-created group
+        // Check if any of these records already in a phone-created group (fast lookup)
         let existingGroup = null;
         for (const idx of unresolved) {
-          for (const pg of personGroups) {
-            if (pg.recordIndices.has(idx)) {
-              existingGroup = pg;
-              break;
-            }
+          if (idxToGroup.has(idx)) {
+            existingGroup = idxToGroup.get(idx);
+            break;
           }
-          if (existingGroup) break;
         }
 
         if (existingGroup) {
+          if (existingGroup.recordIndices.size >= MAX_GROUP_SIZE) { phoneCapped += unresolved.length; continue; }
           for (const idx of unresolved) {
+            if (existingGroup.recordIndices.size >= MAX_GROUP_SIZE) { phoneCapped++; continue; }
             if (!existingGroup.recordIndices.has(idx)) {
               existingGroup.recordIndices.add(idx);
+              idxToGroup.set(idx, existingGroup);
               resolved.add(idx);
             }
           }
@@ -333,7 +356,9 @@ async function main() {
             matchMethod: 'phone'
           };
           for (const idx of unresolved) {
+            if (group.recordIndices.size >= MAX_GROUP_SIZE) { phoneCapped++; continue; }
             group.recordIndices.add(idx);
+            idxToGroup.set(idx, group);
             resolved.add(idx);
             const r = allRecords[idx];
             for (const e of [r.email, r.email2, r.email3]) {
@@ -351,7 +376,7 @@ async function main() {
         }
       }
     }
-    console.log(`  Pass 2: ${phoneNew.toLocaleString()} new persons, ${phoneMerged.toLocaleString()} merged into existing`);
+    console.log(`  Pass 2: ${phoneNew.toLocaleString()} new persons, ${phoneMerged.toLocaleString()} merged, ${phoneCapped.toLocaleString()} capped`);
 
     // ═══════════════════════════════════════════════════════════════════════
     // [4] PASS 3: Remaining unmatched (confidence 0.80)

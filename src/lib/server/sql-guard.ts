@@ -3,7 +3,7 @@
  */
 
 const ALLOWED_TABLES = new Set([
-  // Serving layer (primary — pre-joined views)
+  // Serving layer (primary — pre-joined views with display_name)
   "serving.person_360",
   "serving.household_360",
   "serving.donation_detail",
@@ -13,40 +13,36 @@ const ALLOWED_TABLES = new Set([
   "serving.invoice_detail",
   "serving.tag_detail",
   "serving.communication_detail",
-  // Giving
-  "giving.donation",
-  "giving.recurring_plan",
-  "giving.pledge",
-  // Commerce
-  "commerce.[order]",
-  "commerce.order_line",
-  "commerce.subscription",
-  "commerce.invoice",
-  "commerce.payment",
-  // Engagement
-  "engagement.activity",
-  "engagement.communication",
-  "engagement.note",
-  "engagement.tag",
-  // Event
-  "event.event",
-  "event.ticket",
-  // Person
-  "person.profile",
-  "person.email",
-  "person.phone",
-  "person.address",
-  "person.source_link",
-  // Household
-  "household.unit",
-  "household.member",
-  // Meta
-  "meta.source_system",
-  "meta.file_lineage",
-  // Intel
-  "intel.segment",
-  "intel.segment_member",
-  "intel.donor_score",
+  "serving.donor_summary",
+  "serving.donor_monthly",
+  // Silver layer (typed, cleaned tables)
+  "silver.contact",
+  "silver.donation",
+  "silver.contact_tag",
+  "silver.tag",
+  "silver.note",
+  "silver.communication",
+  "silver.invoice",
+  "silver.payment",
+  "silver.[order]",
+  "silver.order_item",
+  "silver.subscription",
+  "silver.product",
+  "silver.company",
+  "silver.stripe_customer",
+  "silver.contact_email",
+  "silver.contact_phone",
+  "silver.contact_address",
+  "silver.identity_map",
+  // Gold layer (analytical views)
+  "gold.constituent_360",
+  "gold.person",
+  "gold.person_giving",
+  "gold.person_commerce",
+  "gold.person_engagement",
+  "gold.monthly_trends",
+  "gold.product_summary",
+  "gold.subscription_health",
 ]);
 
 const BLOCKED_PATTERNS = [
@@ -61,7 +57,7 @@ const BLOCKED_PATTERNS = [
 ];
 
 const MAX_ROWS = 500;
-const QUERY_TIMEOUT_MS = 15_000;
+const QUERY_TIMEOUT_MS = 30_000;
 
 export interface GuardResult {
   ok: boolean;

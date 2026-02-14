@@ -179,6 +179,53 @@ FROM engagement.communication c
 JOIN serving.person_360 p ON p.person_id = c.person_id
 LEFT JOIN meta.source_system s ON s.source_id = c.source_id`
   },
+  {
+    name: 'serving.donor_summary',
+    description: 'One row per donor with pre-ranked totals — instant top-N queries',
+    sql: `CREATE OR ALTER VIEW serving.donor_summary AS
+SELECT
+  p.person_id,
+  COALESCE(p.display_name, p.first_name + ' ' + p.last_name, 'Anonymous') AS display_name,
+  p.first_name,
+  p.last_name,
+  p.email,
+  p.household_id,
+  p.household_name,
+  p.lifecycle_stage,
+  p.source_systems,
+  COUNT(*)                          AS donation_count,
+  SUM(d.amount)                     AS total_given,
+  AVG(d.amount)                     AS avg_gift,
+  MAX(d.amount)                     AS largest_gift,
+  MIN(d.donated_at)                 AS first_gift_date,
+  MAX(d.donated_at)                 AS last_gift_date,
+  DATEDIFF(DAY, MAX(d.donated_at), GETDATE()) AS days_since_last,
+  COUNT(DISTINCT d.fund)            AS fund_count,
+  COUNT(DISTINCT FORMAT(d.donated_at,'yyyy-MM')) AS active_months
+FROM giving.donation d
+JOIN serving.person_360 p ON p.person_id = d.person_id
+GROUP BY p.person_id, p.display_name, p.first_name, p.last_name,
+         p.email, p.household_id, p.household_name,
+         p.lifecycle_stage, p.source_systems`
+  },
+  {
+    name: 'serving.donor_monthly',
+    description: 'One row per donor-month with pre-aggregated amounts — instant monthly breakdowns',
+    sql: `CREATE OR ALTER VIEW serving.donor_monthly AS
+SELECT
+  d.person_id,
+  COALESCE(p.display_name, p.first_name + ' ' + p.last_name, 'Anonymous') AS display_name,
+  FORMAT(d.donated_at, 'yyyy-MM')   AS donation_month,
+  YEAR(d.donated_at)                AS donation_year,
+  COUNT(*)                          AS gifts,
+  SUM(d.amount)                     AS amount,
+  MAX(d.fund)                       AS primary_fund,
+  MAX(d.payment_method)             AS primary_method
+FROM giving.donation d
+JOIN serving.person_360 p ON p.person_id = d.person_id
+GROUP BY d.person_id, p.display_name, p.first_name, p.last_name,
+         FORMAT(d.donated_at, 'yyyy-MM'), YEAR(d.donated_at)`
+  },
 ];
 
 (async () => {

@@ -4,7 +4,7 @@ import { getServerEnv, looksConfigured } from "@/lib/server/env";
 
 /**
  * Provider priority:
- * 1. Direct OpenAI API (OPENAI_API_KEY) — GPT-5.2
+ * 1. Direct OpenAI API (OPENAI_API_KEY) — GPT-4.1-mini
  * 2. Azure OpenAI (SOZO_OPENAI_*) — fallback
  */
 
@@ -48,12 +48,12 @@ function extractResourceName(endpoint: string): string {
   }
 }
 
-/** Primary model — GPT-5.2 via OpenAI API, or Azure gpt-4o fallback */
+/** Primary model — GPT-4.1-mini via OpenAI API, or Azure gpt-4o fallback */
 export function getReasoningModel() {
   // 1. Try direct OpenAI API
   const openai = getOpenAIProvider();
   if (openai) {
-    const model = process.env.OPENAI_MODEL ?? "gpt-5.2";
+    const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
     return openai(model);
   }
 
@@ -70,12 +70,12 @@ export function getReasoningModel() {
   );
 }
 
-/** Quick model — GPT-5.2 via OpenAI API, or Azure gpt-4o-mini fallback */
+/** Quick model — GPT-4.1-mini via OpenAI API, or Azure gpt-4o-mini fallback */
 export function getQuickModel() {
   // 1. Try direct OpenAI API
   const openai = getOpenAIProvider();
   if (openai) {
-    const model = process.env.OPENAI_MODEL ?? "gpt-5.2";
+    const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
     return openai(model);
   }
 
