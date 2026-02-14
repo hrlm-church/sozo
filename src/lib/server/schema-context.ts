@@ -43,10 +43,17 @@ USE FOR: "Stripe customers", "unlinked payments", "payment gaps". $2M total spen
 - For donors: use donor_summary or donor_monthly, never CTEs on donation_detail
 - TOP (N) with parens, DATEADD(YEAR,-2,GETDATE()) for relative dates
 - display_name is unique enough for display — just SELECT display_name, never concatenate IDs
+- NEVER self-join donor_monthly or donation_detail — self-joins cause row duplication that inflates SUM/COUNT. Use subqueries or window functions instead.
+- For drill_down_table: return ONLY the detail columns (display_name, month, amount). The widget auto-computes group totals. NEVER include a pre-computed total column alongside detail rows — it causes double-counting.
+- When you need to ORDER BY a period total but SHOW monthly detail, use a subquery for the ranking and a separate query for detail, or use a window function: SUM(amount) OVER (PARTITION BY person_id) as period_total — but ONLY if querying a single table with no JOINs.
 
 ## Query Patterns
-Top 20 donors: SELECT TOP (20) display_name, total_given, donation_count, avg_gift, last_gift_date FROM serving.donor_summary WHERE display_name <> 'Unknown' ORDER BY total_given DESC
+Top 20 donors (lifetime): SELECT TOP (20) display_name, total_given, donation_count, avg_gift, last_gift_date FROM serving.donor_summary WHERE display_name <> 'Unknown' ORDER BY total_given DESC
 
-Top 20 donors monthly: SELECT m.display_name, m.donation_month, m.amount FROM serving.donor_monthly m WHERE m.person_id IN (SELECT TOP (20) person_id FROM serving.donor_summary WHERE display_name <> 'Unknown' ORDER BY total_given DESC) AND m.donation_month >= FORMAT(DATEADD(YEAR,-2,GETDATE()),'yyyy-MM') ORDER BY m.display_name, m.donation_month
+Top 20 donors monthly (by lifetime giving): SELECT m.display_name, m.donation_month, m.amount FROM serving.donor_monthly m WHERE m.person_id IN (SELECT TOP (20) person_id FROM serving.donor_summary WHERE display_name <> 'Unknown' ORDER BY total_given DESC) AND m.donation_month >= FORMAT(DATEADD(YEAR,-2,GETDATE()),'yyyy-MM') ORDER BY m.display_name, m.donation_month
 → Use drill_down_table with groupKey='display_name', detailColumns=['donation_month','amount']
+
+Top 20 donors by 2-year consolidated total with monthly detail: SELECT m.display_name, m.donation_month, m.amount FROM serving.donor_monthly m WHERE m.donation_month >= FORMAT(DATEADD(YEAR,-2,GETDATE()),'yyyy-MM') AND m.display_name <> 'Unknown' AND m.person_id IN (SELECT TOP (20) person_id FROM serving.donor_monthly WHERE donation_month >= FORMAT(DATEADD(YEAR,-2,GETDATE()),'yyyy-MM') AND display_name <> 'Unknown' GROUP BY person_id ORDER BY SUM(amount) DESC) ORDER BY (SELECT SUM(x.amount) FROM serving.donor_monthly x WHERE x.person_id = m.person_id AND x.donation_month >= FORMAT(DATEADD(YEAR,-2,GETDATE()),'yyyy-MM')) DESC, m.display_name, m.donation_month
+→ Use drill_down_table with groupKey='display_name', detailColumns=['donation_month','amount']
+→ The widget will auto-sum the amount column per donor — do NOT add a total column
 `.trim();
