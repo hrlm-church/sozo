@@ -46,39 +46,26 @@ export async function POST(request: Request) {
     const tools = getChatTools();
     const modelMessages = await convertToModelMessages(uiMessages);
     const models = getModelChain();
+    const model = models[0]; // First available model (OpenAI → Claude → Azure)
 
-    // Try each model in priority order (Claude → OpenAI → Azure)
-    let lastError: unknown = null;
-    for (const model of models) {
-      try {
-        console.log("[chat] Trying model:", String(model) ?? "unknown");
+    console.log("[chat] Using model, messages:", modelMessages.length);
 
-        const result = streamText({
-          model,
-          system: SYSTEM_PROMPT,
-          messages: modelMessages,
-          tools,
-          stopWhen: stepCountIs(6),
-          temperature: 0.2,
-          onError: ({ error }) => {
-            console.error("[chat] Stream error:", error);
-          },
-          onFinish: ({ text, finishReason, usage }) => {
-            console.log("[chat] Finished:", { model: String(model), finishReason, usage, textLen: text?.length });
-          },
-        });
+    const result = streamText({
+      model,
+      system: SYSTEM_PROMPT,
+      messages: modelMessages,
+      tools,
+      stopWhen: stepCountIs(6),
+      temperature: 0.2,
+      onError: ({ error }) => {
+        console.error("[chat] Stream error:", error);
+      },
+      onFinish: ({ text, finishReason, usage }) => {
+        console.log("[chat] Finished:", { finishReason, usage, textLen: text?.length });
+      },
+    });
 
-        return result.toUIMessageStreamResponse();
-      } catch (err) {
-        lastError = err;
-        const msg = err instanceof Error ? err.message : String(err);
-        console.warn(`[chat] Model failed (${String(model)}): ${msg.substring(0, 200)}`);
-        // Continue to next model
-      }
-    }
-
-    // All models failed
-    throw lastError ?? new Error("All AI providers failed");
+    return result.toUIMessageStreamResponse();
   } catch (error) {
     console.error("[chat] Route error:", error);
     return new Response(
