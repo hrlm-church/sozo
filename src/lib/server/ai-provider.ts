@@ -59,7 +59,7 @@ export function getModelChain(): LanguageModel[] {
   // 1. OpenAI (reliable, no rate limit issues)
   const openai = getOpenAIProvider();
   if (openai) {
-    const model = process.env.OPENAI_MODEL ?? "gpt-5-mini";
+    const model = process.env.OPENAI_MODEL ?? "gpt-5.2";
     models.push(openai(model));
   }
 
