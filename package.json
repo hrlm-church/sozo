@@ -39,6 +39,7 @@
     "pipeline:run": "node scripts/ingest/run_full_pipeline.js"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.44",
     "@ai-sdk/azure": "^3.0.28",
     "@ai-sdk/openai": "^3.0.27",
     "@ai-sdk/react": "^3.0.83",

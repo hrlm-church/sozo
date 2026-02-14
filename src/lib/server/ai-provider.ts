@@ -1,15 +1,28 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAzure } from "@ai-sdk/azure";
 import { getServerEnv, looksConfigured } from "@/lib/server/env";
 
 /**
  * Provider priority:
- * 1. Direct OpenAI API (OPENAI_API_KEY) — GPT-4.1-mini
- * 2. Azure OpenAI (SOZO_OPENAI_*) — fallback
+ * 1. Anthropic Claude (ANTHROPIC_API_KEY) — claude-sonnet-4-5-20250929
+ * 2. Direct OpenAI API (OPENAI_API_KEY) — gpt-5-mini
+ * 3. Azure OpenAI (SOZO_OPENAI_*) — fallback
  */
 
+let _anthropic: ReturnType<typeof createAnthropic> | null = null;
 let _openai: ReturnType<typeof createOpenAI> | null = null;
 let _azure: ReturnType<typeof createAzure> | null = null;
+
+function getAnthropicProvider() {
+  if (_anthropic) return _anthropic;
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  _anthropic = createAnthropic({ apiKey });
+  return _anthropic;
+}
 
 function getOpenAIProvider() {
   if (_openai) return _openai;
@@ -48,16 +61,23 @@ function extractResourceName(endpoint: string): string {
   }
 }
 
-/** Primary model — GPT-4.1-mini via OpenAI API, or Azure gpt-4o fallback */
+/** Primary model — Claude Sonnet 4.5 → OpenAI → Azure fallback */
 export function getReasoningModel() {
-  // 1. Try direct OpenAI API
+  // 1. Try Anthropic Claude
+  const anthropic = getAnthropicProvider();
+  if (anthropic) {
+    const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5-20250929";
+    return anthropic(model);
+  }
+
+  // 2. Try direct OpenAI API
   const openai = getOpenAIProvider();
   if (openai) {
     const model = process.env.OPENAI_MODEL ?? "gpt-5-mini";
     return openai(model);
   }
 
-  // 2. Fall back to Azure OpenAI
+  // 3. Fall back to Azure OpenAI
   const azure = getAzureProvider();
   if (azure) {
     const env = getServerEnv();
@@ -66,20 +86,27 @@ export function getReasoningModel() {
   }
 
   throw new Error(
-    "No AI provider configured. Set OPENAI_API_KEY for OpenAI, or SOZO_OPENAI_ENDPOINT + SOZO_OPENAI_API_KEY for Azure.",
+    "No AI provider configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or SOZO_OPENAI_ENDPOINT + SOZO_OPENAI_API_KEY.",
   );
 }
 
-/** Quick model — GPT-4.1-mini via OpenAI API, or Azure gpt-4o-mini fallback */
+/** Quick model — same priority chain */
 export function getQuickModel() {
-  // 1. Try direct OpenAI API
+  // 1. Try Anthropic Claude
+  const anthropic = getAnthropicProvider();
+  if (anthropic) {
+    const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5-20250929";
+    return anthropic(model);
+  }
+
+  // 2. Try direct OpenAI API
   const openai = getOpenAIProvider();
   if (openai) {
     const model = process.env.OPENAI_MODEL ?? "gpt-5-mini";
     return openai(model);
   }
 
-  // 2. Fall back to Azure OpenAI
+  // 3. Fall back to Azure OpenAI
   const azure = getAzureProvider();
   if (azure) {
     const env = getServerEnv();
@@ -88,6 +115,6 @@ export function getQuickModel() {
   }
 
   throw new Error(
-    "No AI provider configured. Set OPENAI_API_KEY for OpenAI, or SOZO_OPENAI_ENDPOINT + SOZO_OPENAI_API_KEY for Azure.",
+    "No AI provider configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or SOZO_OPENAI_ENDPOINT + SOZO_OPENAI_API_KEY.",
   );
 }

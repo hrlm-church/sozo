@@ -3,10 +3,12 @@
 import { useState, useMemo } from "react";
 import type { Widget } from "@/types/widget";
 
-/** Column names that indicate counts — never format as currency */
-const COUNT_HINTS = /count|number|num|qty|quantity|_id$|_pk$|rank|position/i;
+/** Column names that indicate counts or IDs — never format as currency, never sum in summaries */
+const COUNT_HINTS = /count|number|num|qty|quantity|_id$|_pk$|rank|position|gifts/i;
 /** Column names that should be formatted as currency */
-const CURRENCY_HINTS = /amount|total|giving|donation|gift|revenue|price|cost|payment|invoice|ltv|monetary|salary|budget|balance/i;
+const CURRENCY_HINTS = /amount|total|giving|donation|revenue|price|cost|payment|invoice|ltv|monetary|salary|budget|balance|given|spent/i;
+/** Column names that should NOT be summed in drill-down summary rows */
+const NO_SUM_HINTS = /person_id|_id$|_pk$|year$|donation_year|order_year|_year/i;
 /** ISO date strings */
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 
@@ -50,8 +52,9 @@ export function DrillDownTableWidget({ widget }: { widget: Widget }) {
     if (!groupKey || !data.length) return [] as GroupData[];
 
     const allCols = Object.keys(data[0]);
+    // Only sum columns that are numeric AND not IDs/years
     const numericCols = allCols.filter(
-      (c) => c !== groupKey && data.some((r) => typeof r[c] === "number"),
+      (c) => c !== groupKey && !NO_SUM_HINTS.test(c) && data.some((r) => typeof r[c] === "number"),
     );
 
     const map = new Map<string, Record<string, unknown>[]>();
@@ -64,7 +67,7 @@ export function DrillDownTableWidget({ widget }: { widget: Widget }) {
 
     return order.map((key) => {
       const rows = map.get(key)!;
-      // Auto-compute summary: sum numeric columns, count rows
+      // Auto-compute summary: sum numeric columns (excluding IDs/years), count rows
       const summary: Record<string, unknown> = { [groupKey]: key, _count: rows.length };
       for (const col of numericCols) {
         summary[col] = rows.reduce((acc, r) => acc + (typeof r[col] === "number" ? (r[col] as number) : 0), 0);
@@ -87,8 +90,9 @@ export function DrillDownTableWidget({ widget }: { widget: Widget }) {
   const detailCols = detailColumns ?? allCols.filter((c) => c !== groupKey);
 
   // Always include groupKey as first summary column + count at end
+  // Exclude ID/year columns from auto-computed summaries
   const baseSummary = summaryColumns ?? allCols.filter(
-    (c) => c !== groupKey && data.some((r) => typeof r[c] === "number"),
+    (c) => c !== groupKey && !NO_SUM_HINTS.test(c) && data.some((r) => typeof r[c] === "number"),
   );
   const summaryCols = [
     // groupKey always first so the name is always visible
