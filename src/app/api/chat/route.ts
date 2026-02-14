@@ -26,7 +26,7 @@ The database contains ALL people — not just donors. People can be donors, cust
 
 ## Data Domains (you can query ALL of these)
 - **People** — 84K+ unified profiles across ALL roles (donors, customers, subscribers, attendees, contacts)
-- **Giving** — 135K+ donations from 5K+ donors, $14.3M lifetime giving across campaigns and funds
+- **Giving** — 66K+ deduplicated donations from 5K+ donors, $7.1M lifetime giving across campaigns and funds
 - **Commerce** — 205K+ orders, 135K payments, 205K invoices, 6.3K subscriptions
 - **Tags** — 3M tag assignments across 1,826 tags — richest segmentation data (True Girl, Donor tiers, Nurture, Tours)
 - **Engagement** — 24K communications, 370K notes across all source systems

@@ -27,12 +27,13 @@ household_giving_total,
 giving_trend — VALUES: 'none', 'declining', 'growing', 'stable',
 state, city
 
-### serving.donation_detail — Every donation with person info (135,888 rows, 2014–2025)
+### serving.donation_detail — Every donation with person info (66,560 rows, 2014–2025, deduplicated)
 donation_id, person_id, display_name, first_name, last_name, email,
 amount, currency, donated_at, donation_month (yyyy-MM), donation_year,
-payment_method — VALUES: 'PCC' (57K), 'card' (59K), 'CK' (1.4K), 'CC' (3.7K), 'EFT',
+payment_method — VALUES: 'PCC', 'card', 'CK', 'CC', 'EFT',
 fund — VALUES: various fund codes,
 appeal, designation, source_ref, source_system
+NOTE: Cross-source duplicates have been removed (donor_direct preferred over givebutter)
 
 ### serving.donor_summary — Pre-ranked donor totals (one row per donor, 5,042 rows)
 person_id, display_name, first_name, last_name, email,
@@ -44,7 +45,7 @@ lifecycle_stage — VALUES: 'active', 'cooling', 'lapsed', 'lost'
 USE THIS for: "top donors", "biggest givers", "donor leaderboard", "who gives the most"
 Just: SELECT TOP (20) * FROM serving.donor_summary ORDER BY total_given DESC
 
-### serving.donor_monthly — Donor giving by month (one row per donor-month, 62,414 rows)
+### serving.donor_monthly — Donor giving by month (one row per donor-month, 62,413 rows)
 person_id, display_name, donation_month (yyyy-MM), donation_year,
 gifts (count), amount (sum), primary_fund, primary_method
 USE THIS for: "giving by month", "monthly breakdown", "donor trends over time"
@@ -121,8 +122,8 @@ direction, subject, sent_at, source_system
 
 ## Key Stats
 - 84,507 unified people (96K contacts across 3 source systems)
-- 5,042 donors with $14.3M total giving
-- 135K donations, 208K orders, 135K payments
+- 5,042 donors with $7.1M total giving (deduplicated)
+- 66.5K donations, 205K orders, 135K payments
 - 3M tag assignments across 1,826 tags (richest segmentation data)
 - 6,337 subscriptions (46 active, 6.3K inactive)
 - 370K notes, 24K communications
