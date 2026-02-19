@@ -15,17 +15,17 @@ export async function saveInsight(
   try {
     const owner = ownerEmail || "system@sozo.local";
 
-    // user_interest insights: dedup by matching first 50 chars, and never expire
-    if (category === "user_interest") {
+    // Persistent categories: dedup by matching first 50 chars, update instead of duplicate
+    const dedupCategories = ["user_interest", "correction", "learning"];
+    if (dedupCategories.includes(category)) {
       const prefix = text.slice(0, 50);
       const existing = await executeSql(`
         SELECT TOP (1) id FROM sozo.insight
         WHERE owner_email = N'${esc(owner)}'
-          AND category = N'user_interest'
+          AND category = N'${esc(category)}'
           AND LEFT(insight_text, 50) = N'${esc(prefix)}'
       `);
       if (existing.ok && existing.rows.length > 0) {
-        // Update existing rather than duplicate
         const existingId = existing.rows[0].id as string;
         await executeSql(`
           UPDATE sozo.insight
@@ -41,7 +41,9 @@ export async function saveInsight(
 
     const id = crypto.randomUUID();
     const conf = Math.min(Math.max(confidence, 0), 1);
-    const expiresAt = category === "user_interest"
+    // Persistent categories never expire — they represent learned knowledge
+    const persistentCategories = ["user_interest", "correction", "learning"];
+    const expiresAt = persistentCategories.includes(category)
       ? "NULL"
       : "DATEADD(day, 30, SYSUTCDATETIME())";
 
@@ -90,23 +92,38 @@ export async function getRecentInsights(limit: number = 20, ownerEmail?: string)
   }
 }
 
-/** Get user context from saved user_interest insights — injected into system prompt */
+/** Get user context from saved persistent memories — injected into system prompt */
 export async function getUserContext(ownerEmail: string): Promise<string> {
   try {
     const result = await executeSql(`
-      SELECT TOP (10) insight_text, FORMAT(created_at, 'MMM d') AS saved_on
+      SELECT TOP (30) insight_text, category, FORMAT(created_at, 'MMM d') AS saved_on
       FROM sozo.insight
       WHERE owner_email = N'${esc(ownerEmail)}'
-        AND category = N'user_interest'
+        AND category IN (N'user_interest', N'correction', N'learning')
         AND (expires_at IS NULL OR expires_at > SYSUTCDATETIME())
       ORDER BY created_at DESC
     `);
     if (!result.ok || result.rows.length === 0) return "";
 
-    const lines = result.rows.map((r: Record<string, unknown>) =>
-      `- ${r.insight_text as string}`
-    );
-    return lines.join("\n");
+    const sections: Record<string, string[]> = {};
+    for (const r of result.rows) {
+      const cat = r.category as string;
+      const text = r.insight_text as string;
+      if (!sections[cat]) sections[cat] = [];
+      sections[cat].push(`- ${text}`);
+    }
+
+    const parts: string[] = [];
+    if (sections.correction?.length) {
+      parts.push(`**Corrections (things you got wrong before — don't repeat):**\n${sections.correction.join("\n")}`);
+    }
+    if (sections.user_interest?.length) {
+      parts.push(`**What this user cares about:**\n${sections.user_interest.join("\n")}`);
+    }
+    if (sections.learning?.length) {
+      parts.push(`**Learned from past conversations:**\n${sections.learning.join("\n")}`);
+    }
+    return parts.join("\n\n");
   } catch {
     return "";
   }

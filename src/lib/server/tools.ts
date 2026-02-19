@@ -240,20 +240,20 @@ export function getChatTools(ownerEmail?: string) {
 
     save_insight: tool({
       description:
-        "Save a notable data insight or finding to long-term memory. " +
-        "Use this AUTOMATICALLY whenever your analysis reveals something actionable, surprising, or important. " +
-        "Examples: 'Top 5 donors account for 23% of all giving', " +
-        "'December giving is 4x higher than average — critical for year-end campaigns', " +
-        "'383 recurring donors were lost in platform migration — $205K/year impact'. " +
-        "Also use category 'user_interest' to remember what this user cares about — " +
-        "e.g. 'User focuses on major donor retention', 'User tracks subscription churn closely'. " +
-        "Saved insights persist across conversations and inform future analysis.",
+        "Save something to your long-term memory. This is how you learn and get smarter across conversations. " +
+        "USE THIS AFTER EVERY MEANINGFUL EXCHANGE. Categories: " +
+        "- Data findings (giving/commerce/events/etc): 'Top 5 donors = 23% of giving', 'December = 25% of annual giving' " +
+        "- 'user_interest': What this user cares about — 'User focuses on donor retention', 'User tracks subscription churn' " +
+        "- 'correction': When the user corrects you — 'Keap subscriptions are stale, only use Subbly', 'Do not show person_id' " +
+        "- 'learning': General lessons — 'Donor Direct data requires account number joins', 'Tours are #1 acquisition channel' " +
+        "- 'risk'/'opportunity': Strategic flags — '383 lost recurring donors = $205K/year', 'Ultra High donors giving way below capacity' " +
+        "Corrections and learnings NEVER expire. Save generously — you read these at the start of every future conversation.",
       inputSchema: z.object({
         text: z
           .string()
           .describe("The insight text — a concise, actionable finding (1-2 sentences max)"),
         category: z
-          .enum(["giving", "commerce", "events", "subscriptions", "engagement", "wealth", "risk", "opportunity", "general", "user_interest"])
+          .enum(["giving", "commerce", "events", "subscriptions", "engagement", "wealth", "risk", "opportunity", "general", "user_interest", "correction", "learning"])
           .describe("Category for the insight"),
         confidence: z
           .number()
