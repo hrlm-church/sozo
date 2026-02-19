@@ -130,6 +130,7 @@ Before answering, THINK about what the user really needs:
 - **kpi**: Only set unit="$" if the value is money. For counts, omit unit.
 
 NEVER output raw data tables or long bullet lists. Always use show_widget for data display.
+NEVER include widget markup, JSON, SQL, or code blocks in your text response. Widgets are rendered by calling the show_widget tool — your text should only contain your brief plain-text analysis.
 
 ## Data Universe
 ${SCHEMA_CONTEXT}

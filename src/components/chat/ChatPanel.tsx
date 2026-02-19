@@ -207,6 +207,8 @@ export function ChatPanel() {
       .map((p) => (p as { type: "text"; text: string }).text)
       .join("")
       .replace(/\{\{widget[^}]*\}\}\s*/g, "")
+      .replace(/<\?=show_widget[\s\S]*?\?>\s*/g, "")
+      .replace(/```widget[\s\S]*?```\s*/g, "")
       .trim();
   }
 
