@@ -4,6 +4,7 @@ import { guardSql, QUERY_TIMEOUT_MS } from "@/lib/server/sql-guard";
 import { executeSql } from "@/lib/server/sql-client";
 import { hybridSearch } from "@/lib/server/search-client";
 import { buildComprehensive360 } from "@/lib/server/build-360";
+import { saveInsight, getRecentInsights } from "@/lib/server/insights";
 import type { Widget, WidgetType, WidgetConfig } from "@/types/widget";
 
 /**
@@ -234,6 +235,39 @@ export function getChatTools() {
           createdAt: new Date().toISOString(),
         };
         return { widget };
+      },
+    }),
+
+    save_insight: tool({
+      description:
+        "Save a notable data insight or finding to long-term memory. " +
+        "Use this AUTOMATICALLY whenever your analysis reveals something actionable, surprising, or important. " +
+        "Examples: 'Top 5 donors account for 23% of all giving', " +
+        "'December giving is 4x higher than average — critical for year-end campaigns', " +
+        "'383 recurring donors were lost in platform migration — $205K/year impact'. " +
+        "Saved insights persist across conversations and inform future analysis. " +
+        "Only save genuinely notable findings — not routine query results.",
+      inputSchema: z.object({
+        text: z
+          .string()
+          .describe("The insight text — a concise, actionable finding (1-2 sentences max)"),
+        category: z
+          .enum(["giving", "commerce", "events", "subscriptions", "engagement", "wealth", "risk", "opportunity", "general"])
+          .describe("Category for the insight"),
+        confidence: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.8)
+          .describe("How confident you are in this insight (0-1)"),
+        source_query: z
+          .string()
+          .optional()
+          .describe("The SQL query or search that produced this insight"),
+      }),
+      execute: async ({ text, category, confidence, source_query }) => {
+        const result = await saveInsight(text, category, confidence, source_query);
+        return result;
       },
     }),
   };

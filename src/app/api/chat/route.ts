@@ -3,6 +3,7 @@ import type { UIMessage } from "ai";
 import { getModelChain } from "@/lib/server/ai-provider";
 import { getChatTools } from "@/lib/server/tools";
 import { SCHEMA_CONTEXT } from "@/lib/server/schema-context";
+import { getRecentInsights } from "@/lib/server/insights";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -81,6 +82,7 @@ const SYSTEM_PROMPT = `You are Sozo, the intelligence analyst for Pure Freedom M
    - "full view of top N donors/subscribers/buyers"
    - Any request for comprehensive per-person data across multiple data streams
 4. **show_widget** — Display interactive visualization. Types: kpi, stat_grid, bar_chart, line_chart, area_chart, donut_chart, table, drill_down_table, funnel, text.
+5. **save_insight** — Save a notable finding to long-term memory. Use AUTOMATICALLY when your analysis reveals something actionable, surprising, or important. Insights persist across conversations and inform future analysis. Only save genuinely notable findings.
 
 ## Reasoning & Workflow
 Before answering, THINK about what the user really needs. Consider:
@@ -98,6 +100,7 @@ Before answering, THINK about what the user really needs. Consider:
 
 **After each tool call**, evaluate: Did I get everything the user needs? If not, call another tool.
 **Always end with** show_widget to visualize. Then 1-2 sentences of insight max.
+**If you discover something notable** (surprising trend, risk, opportunity), call save_insight to remember it for future conversations.
 
 ## 360 View Patterns
 - "Full 360 of top N donors": build_360 with filter='lifetime_giving > 0', order_by='lifetime_giving DESC', limit=N → show as table with ALL columns
@@ -171,11 +174,22 @@ export async function POST(request: Request) {
     const models = getModelChain();
     const model = models[0]; // First available model (OpenAI → Claude → Azure)
 
+    // Inject recent insights into system prompt
+    let systemPrompt = SYSTEM_PROMPT;
+    try {
+      const insightsText = await getRecentInsights(20);
+      if (insightsText) {
+        systemPrompt += `\n\n## Remembered Insights (from previous conversations)\nThese are findings you've saved. Reference them when relevant — don't re-discover what you already know.\n${insightsText}`;
+      }
+    } catch {
+      // Non-critical — proceed without insights
+    }
+
     console.log("[chat] Using model, messages:", modelMessages.length);
 
     const result = streamText({
       model,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: modelMessages,
       tools,
       stopWhen: stepCountIs(12),
