@@ -82,7 +82,7 @@ export function WidgetCard({ widget, children, onPin, onRemove, isPinned }: Widg
                   }}
                 >
                   <ExportMenuItem onClick={handleExportCSV} label="CSV" desc="Spreadsheet-compatible" />
-                  <ExportMenuItem onClick={handleExportXLSX} label="Excel (.xlsx)" desc="Formatted workbook" />
+                  <ExportMenuItem onClick={handleExportXLSX} label="Excel" desc="Formatted workbook" />
                   <ExportMenuItem onClick={handleExportPDF} label="PDF" desc="Print-ready snapshot" />
                 </div>
               )}
@@ -139,7 +139,7 @@ function ExportMenuItem({ onClick, label, desc }: { onClick: () => void; label: 
         textAlign: "left",
         transition: "background 100ms ease",
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-light, #f0f0ff)"; }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0, 113, 227, 0.04)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
     >
       <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-primary)" }}>{label}</div>

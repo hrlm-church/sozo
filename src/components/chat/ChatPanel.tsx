@@ -6,7 +6,6 @@ import type { UIMessage } from "ai";
 import { isToolUIPart, getToolName } from "ai";
 import { WidgetRenderer } from "@/components/widgets/WidgetRenderer";
 import { SuggestedPrompts } from "./SuggestedPrompts";
-import { ConversationSidebar } from "./ConversationSidebar";
 import { useDashboardStore } from "@/lib/stores/dashboard-store";
 import { useConversationStore } from "@/lib/stores/conversation-store";
 import type { Widget } from "@/types/widget";
@@ -54,7 +53,6 @@ export function ChatPanel() {
   const widgets = useDashboardStore((s) => s.widgets);
   const pinnedIds = useMemo(() => new Set(widgets.map((w) => w.id)), [widgets]);
   const [input, setInput] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [feedbackMap, setFeedbackMap] = useState<Record<string, number>>({});
   const [loadingPhrase, setLoadingPhrase] = useState(getRandomPhrase);
 
@@ -69,7 +67,7 @@ export function ChatPanel() {
   const isLoading = status === "submitted" || status === "streaming";
   const prevStatusRef = useRef(status);
 
-  // When conversation changes in sidebar, load it
+  // When conversation changes, load it
   useEffect(() => {
     if (conversationId && conversationId !== activeConvId) {
       loadConversation(conversationId);
@@ -190,7 +188,7 @@ export function ChatPanel() {
       .filter((p) => p.type === "text")
       .map((p) => (p as { type: "text"; text: string }).text)
       .join("")
-      .replace(/\{\{widget:id=[^}]+\}\}\s*/g, "")
+      .replace(/\{\{widget[^}]*\}\}\s*/g, "")
       .trim();
   }
 
@@ -228,7 +226,7 @@ export function ChatPanel() {
 
   const handleFeedback = async (messageId: string, rating: number) => {
     const prev = feedbackMap[messageId];
-    if (prev === rating) return; // already rated same
+    if (prev === rating) return;
     setFeedbackMap((m) => ({ ...m, [messageId]: rating }));
     try {
       await fetch("/api/feedback", {
@@ -242,327 +240,295 @@ export function ChatPanel() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100%" }}>
-      {/* Conversation Sidebar */}
-      {sidebarOpen && <ConversationSidebar />}
-
-      {/* Main Chat Area */}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        flex: 1,
+        background: "var(--surface)",
+        borderRight: "1px solid var(--surface-border)",
+        minWidth: 0,
+      }}
+    >
+      {/* Header */}
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-          flex: 1,
-          background: "var(--surface)",
-          borderRight: "1px solid var(--surface-border)",
-          minWidth: 0,
+          padding: "14px 24px",
+          borderBottom: "1px solid var(--surface-border)",
+          flexShrink: 0,
         }}
       >
-        {/* Header */}
-        <div
+        <h2
           style={{
-            padding: "12px 20px",
-            borderBottom: "1px solid var(--surface-border)",
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
+            fontSize: "1.1rem",
+            fontWeight: 700,
+            margin: 0,
+            letterSpacing: "-0.025em",
+            color: "var(--text-primary)",
           }}
         >
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            title={sidebarOpen ? "Hide history" : "Show history"}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.85rem",
-              color: "var(--text-muted)",
-              padding: "2px 4px",
-            }}
-          >
-            {sidebarOpen ? "\u2630" : "\u2630"}
-          </button>
-          <div>
-            <h2
-              style={{
-                fontSize: "1.05rem",
-                fontWeight: 700,
-                margin: 0,
-                letterSpacing: "-0.02em",
-                background: "var(--accent-gradient)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              Sozo
-            </h2>
-            <p
-              style={{
-                fontSize: "0.68rem",
-                color: "var(--text-muted)",
-                margin: 0,
-                marginTop: 1,
-              }}
-            >
-              Ministry Intelligence
-            </p>
-          </div>
-        </div>
+          Sozo
+        </h2>
+        <p
+          style={{
+            fontSize: "0.72rem",
+            color: "var(--text-muted)",
+            margin: "2px 0 0",
+          }}
+        >
+          Ministry Intelligence
+        </p>
+      </div>
 
-        {/* Messages area */}
-        <div ref={scrollRef} style={{ flex: 1, overflow: "auto", padding: "20px 20px" }}>
-          {messages.length === 0 ? (
-            <SuggestedPrompts onSelect={handleSuggestedPrompt} />
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {messages.map((message) => {
-                const text = getTextContent(message);
-                const msgWidgets = getWidgets(message);
-                return (
-                  <div key={message.id}>
-                    {text && (
-                      <div
-                        style={{
-                          padding: "10px 16px",
-                          borderRadius: 18,
-                          fontSize: "0.84rem",
-                          lineHeight: 1.55,
-                          ...(message.role === "user"
-                            ? {
-                                background: "var(--accent-gradient)",
-                                color: "#fff",
-                                marginLeft: 48,
-                                borderBottomRightRadius: 6,
-                              }
-                            : {
-                                background: "rgba(255, 255, 255, 0.04)",
-                                backdropFilter: "blur(12px)",
-                                border: "1px solid rgba(255, 255, 255, 0.06)",
-                                color: "var(--text-primary)",
-                                marginRight: 24,
-                                borderBottomLeftRadius: 6,
-                              }),
-                        }}
-                      >
-                        {text}
-                      </div>
-                    )}
-                    {message.role === "assistant" && text && (
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 4,
-                          marginTop: 4,
-                          marginLeft: 4,
-                        }}
-                      >
-                        <button
-                          onClick={() => handleFeedback(message.id, 1)}
-                          title="Helpful"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            fontSize: "0.8rem",
-                            padding: "2px 6px",
-                            borderRadius: 6,
-                            color:
-                              feedbackMap[message.id] === 1
-                                ? "#16a34a"
-                                : "var(--text-muted)",
-                            opacity: feedbackMap[message.id] === 1 ? 1 : 0.5,
-                            transition: "all 120ms ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            if (feedbackMap[message.id] !== 1)
-                              e.currentTarget.style.opacity = "1";
-                          }}
-                          onMouseLeave={(e) => {
-                            if (feedbackMap[message.id] !== 1)
-                              e.currentTarget.style.opacity = "0.5";
-                          }}
-                        >
-                          {feedbackMap[message.id] === 1 ? "\u{1F44D}" : "\u{1F44D}"}
-                        </button>
-                        <button
-                          onClick={() => handleFeedback(message.id, -1)}
-                          title="Not helpful"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            fontSize: "0.8rem",
-                            padding: "2px 6px",
-                            borderRadius: 6,
-                            color:
-                              feedbackMap[message.id] === -1
-                                ? "#dc2626"
-                                : "var(--text-muted)",
-                            opacity: feedbackMap[message.id] === -1 ? 1 : 0.5,
-                            transition: "all 120ms ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            if (feedbackMap[message.id] !== -1)
-                              e.currentTarget.style.opacity = "1";
-                          }}
-                          onMouseLeave={(e) => {
-                            if (feedbackMap[message.id] !== -1)
-                              e.currentTarget.style.opacity = "0.5";
-                          }}
-                        >
-                          {feedbackMap[message.id] === -1 ? "\u{1F44E}" : "\u{1F44E}"}
-                        </button>
-                      </div>
-                    )}
-                    {msgWidgets.map((widget) => {
-                      const tall =
-                        widget.type === "stat_grid" ||
-                        widget.type === "table" ||
-                        widget.type === "drill_down_table";
-                      return (
-                        <div
-                          key={widget.id}
-                          style={{ marginTop: 10, minHeight: tall ? 360 : 280 }}
-                        >
-                          <WidgetRenderer
-                            widget={widget}
-                            onPin={() => addWidget(widget)}
-                            isPinned={pinnedIds.has(widget.id)}
-                          />
-                          {!pinnedIds.has(widget.id) && (
-                            <button
-                              onClick={() => addWidget(widget)}
-                              style={{
-                                display: "block",
-                                margin: "6px auto 0",
-                                padding: "5px 16px",
-                                fontSize: "0.72rem",
-                                fontWeight: 600,
-                                color: "var(--accent)",
-                                background: "var(--accent-light)",
-                                border: "1px solid var(--accent)",
-                                borderRadius: "var(--r-pill)",
-                                cursor: "pointer",
-                                transition: "all 120ms ease",
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = "var(--accent)";
-                                e.currentTarget.style.color = "#fff";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = "var(--accent-light)";
-                                e.currentTarget.style.color = "var(--accent)";
-                              }}
-                            >
-                              + Pin to Dashboard
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-              {isLoading &&
-                (() => {
-                  const lastAssistant = [...messages]
-                    .reverse()
-                    .find((m) => m.role === "assistant");
-                  const toolActivity = lastAssistant
-                    ? getActiveToolCalls(lastAssistant)
-                    : [];
-                  return (
+      {/* Messages area */}
+      <div ref={scrollRef} style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
+        {messages.length === 0 ? (
+          <SuggestedPrompts onSelect={handleSuggestedPrompt} />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {messages.map((message) => {
+              const text = getTextContent(message);
+              const msgWidgets = getWidgets(message);
+              return (
+                <div key={message.id}>
+                  {text && (
                     <div
                       style={{
                         padding: "10px 16px",
-                        borderRadius: 18,
-                        background: "rgba(255, 255, 255, 0.04)",
-                        backdropFilter: "blur(12px)",
-                        border: "1px solid rgba(255, 255, 255, 0.06)",
-                        color: "var(--text-muted)",
+                        borderRadius: 16,
                         fontSize: "0.84rem",
-                        marginRight: 24,
-                        borderBottomLeftRadius: 6,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
+                        lineHeight: 1.6,
+                        ...(message.role === "user"
+                          ? {
+                              background: "var(--accent)",
+                              color: "#fff",
+                              marginLeft: 48,
+                              borderBottomRightRadius: 6,
+                            }
+                          : {
+                              background: "var(--app-bg)",
+                              color: "var(--text-primary)",
+                              marginRight: 24,
+                              borderBottomLeftRadius: 6,
+                            }),
                       }}
                     >
-                      <span style={{ display: "flex", gap: 2 }}>
-                        <span className="typing-dot" />
-                        <span className="typing-dot" />
-                        <span className="typing-dot" />
-                      </span>
-                      <span className="loading-pulse">
-                        {toolActivity.length > 0
-                          ? toolActivity[toolActivity.length - 1]
-                          : loadingPhrase}
-                      </span>
+                      {text}
                     </div>
-                  );
-                })()}
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <div
-            style={{
-              padding: "8px 20px",
-              fontSize: "0.75rem",
-              color: "var(--red)",
-              flexShrink: 0,
-            }}
-          >
-            {error.message}
+                  )}
+                  {message.role === "assistant" && text && (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 4,
+                        marginTop: 4,
+                        marginLeft: 4,
+                      }}
+                    >
+                      <button
+                        onClick={() => handleFeedback(message.id, 1)}
+                        title="Helpful"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "0.8rem",
+                          padding: "2px 6px",
+                          borderRadius: 6,
+                          color:
+                            feedbackMap[message.id] === 1
+                              ? "#34c759"
+                              : "var(--text-muted)",
+                          opacity: feedbackMap[message.id] === 1 ? 1 : 0.5,
+                          transition: "all 120ms ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (feedbackMap[message.id] !== 1)
+                            e.currentTarget.style.opacity = "1";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (feedbackMap[message.id] !== 1)
+                            e.currentTarget.style.opacity = "0.5";
+                        }}
+                      >
+                        {"\u{1F44D}"}
+                      </button>
+                      <button
+                        onClick={() => handleFeedback(message.id, -1)}
+                        title="Not helpful"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "0.8rem",
+                          padding: "2px 6px",
+                          borderRadius: 6,
+                          color:
+                            feedbackMap[message.id] === -1
+                              ? "#ff3b30"
+                              : "var(--text-muted)",
+                          opacity: feedbackMap[message.id] === -1 ? 1 : 0.5,
+                          transition: "all 120ms ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (feedbackMap[message.id] !== -1)
+                            e.currentTarget.style.opacity = "1";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (feedbackMap[message.id] !== -1)
+                            e.currentTarget.style.opacity = "0.5";
+                        }}
+                      >
+                        {"\u{1F44E}"}
+                      </button>
+                    </div>
+                  )}
+                  {msgWidgets.map((widget) => {
+                    const tall =
+                      widget.type === "stat_grid" ||
+                      widget.type === "table" ||
+                      widget.type === "drill_down_table";
+                    return (
+                      <div
+                        key={widget.id}
+                        style={{ marginTop: 10, minHeight: tall ? 360 : 280 }}
+                      >
+                        <WidgetRenderer
+                          widget={widget}
+                          onPin={() => addWidget(widget)}
+                          isPinned={pinnedIds.has(widget.id)}
+                        />
+                        {!pinnedIds.has(widget.id) && (
+                          <button
+                            onClick={() => addWidget(widget)}
+                            style={{
+                              display: "block",
+                              margin: "6px auto 0",
+                              padding: "5px 16px",
+                              fontSize: "0.72rem",
+                              fontWeight: 600,
+                              color: "var(--accent)",
+                              background: "var(--accent-light)",
+                              border: "1px solid var(--accent)",
+                              borderRadius: "var(--r-pill)",
+                              cursor: "pointer",
+                              transition: "all 120ms ease",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "var(--accent)";
+                              e.currentTarget.style.color = "#fff";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "var(--accent-light)";
+                              e.currentTarget.style.color = "var(--accent)";
+                            }}
+                          >
+                            + Pin to Dashboard
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {isLoading &&
+              (() => {
+                const lastAssistant = [...messages]
+                  .reverse()
+                  .find((m) => m.role === "assistant");
+                const toolActivity = lastAssistant
+                  ? getActiveToolCalls(lastAssistant)
+                  : [];
+                return (
+                  <div
+                    style={{
+                      padding: "10px 16px",
+                      borderRadius: 16,
+                      background: "var(--app-bg)",
+                      color: "var(--text-muted)",
+                      fontSize: "0.84rem",
+                      marginRight: 24,
+                      borderBottomLeftRadius: 6,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <span style={{ display: "flex", gap: 2 }}>
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                      <span className="typing-dot" />
+                    </span>
+                    <span className="loading-pulse">
+                      {toolActivity.length > 0
+                        ? toolActivity[toolActivity.length - 1]
+                        : loadingPhrase}
+                    </span>
+                  </div>
+                );
+              })()}
           </div>
         )}
+      </div>
 
-        {/* Input area */}
-        <form
-          onSubmit={handleSubmit}
+      {error && (
+        <div
           style={{
-            padding: "14px 20px",
-            borderTop: "1px solid var(--surface-border)",
-            display: "flex",
-            gap: 10,
+            padding: "8px 24px",
+            fontSize: "0.75rem",
+            color: "var(--red)",
             flexShrink: 0,
           }}
         >
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask anything..."
-            disabled={isLoading}
-            style={{
-              flex: 1,
-              padding: "10px 16px",
-              borderRadius: "var(--r-pill)",
-              border: "1px solid var(--surface-border-strong)",
-              background: "var(--surface-elevated)",
-              fontSize: "0.84rem",
-              outline: "none",
-              color: "var(--text-primary)",
-              transition: "border-color 150ms ease",
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = "var(--accent)";
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = "var(--surface-border-strong)";
-            }}
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            className="gradient-btn"
-            style={{ padding: "10px 22px", fontSize: "0.84rem" }}
-          >
-            Send
-          </button>
-        </form>
-      </div>
+          {error.message}
+        </div>
+      )}
+
+      {/* Input area */}
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          padding: "14px 24px",
+          borderTop: "1px solid var(--surface-border)",
+          display: "flex",
+          gap: 10,
+          flexShrink: 0,
+        }}
+      >
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Ask anything..."
+          disabled={isLoading}
+          style={{
+            flex: 1,
+            padding: "10px 16px",
+            borderRadius: "var(--r-pill)",
+            border: "1px solid var(--surface-border-strong)",
+            background: "var(--app-bg)",
+            fontSize: "0.84rem",
+            outline: "none",
+            color: "var(--text-primary)",
+            transition: "border-color 150ms ease",
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = "var(--accent)";
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = "var(--surface-border-strong)";
+          }}
+        />
+        <button
+          type="submit"
+          disabled={isLoading || !input.trim()}
+          className="gradient-btn"
+          style={{ padding: "10px 22px", fontSize: "0.84rem" }}
+        >
+          Send
+        </button>
+      </form>
     </div>
   );
 }

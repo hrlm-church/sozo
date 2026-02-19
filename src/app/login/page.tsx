@@ -1,6 +1,37 @@
-import { signIn } from "@/auth";
+"use client";
+
+import { signIn } from "next-auth/react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !password.trim()) return;
+    setLoading(true);
+    setError("");
+
+    const res = await signIn("credentials", {
+      username: username.trim(),
+      password: password.trim(),
+      redirect: false,
+    });
+
+    setLoading(false);
+    if (res?.error) {
+      setError("Invalid username or password");
+    } else {
+      router.push("/");
+      router.refresh();
+    }
+  };
+
   return (
     <div
       style={{
@@ -8,126 +39,166 @@ export default function LoginPage() {
         alignItems: "center",
         justifyContent: "center",
         height: "100vh",
-        background: "#0f0f13",
-        position: "relative",
-        overflow: "hidden",
+        background: "#f5f5f7",
       }}
     >
-      {/* Ambient gradient orbs */}
       <div
         style={{
-          position: "absolute",
-          width: 600,
-          height: 600,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(6,147,227,0.08) 0%, transparent 70%)",
-          top: "-200px",
-          right: "-100px",
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          width: 500,
-          height: 500,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(155,81,224,0.06) 0%, transparent 70%)",
-          bottom: "-150px",
-          left: "-100px",
-          pointerEvents: "none",
-        }}
-      />
-
-      <div
-        style={{
-          textAlign: "center",
-          maxWidth: 380,
-          padding: "48px 36px",
-          background: "rgba(255, 255, 255, 0.03)",
+          width: 360,
+          padding: "48px 40px 40px",
+          background: "#ffffff",
           borderRadius: 20,
-          border: "1px solid rgba(255, 255, 255, 0.06)",
-          backdropFilter: "blur(20px)",
-          position: "relative",
-          zIndex: 1,
+          boxShadow: "0 2px 20px rgba(0, 0, 0, 0.06)",
         }}
       >
-        <h1
-          style={{
-            fontSize: "2.5rem",
-            fontWeight: 700,
-            background: "linear-gradient(135deg, #0693e3 0%, #9b51e0 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            letterSpacing: "-0.04em",
-            margin: "0 0 6px",
-          }}
-        >
-          Sozo
-        </h1>
-        <p style={{ fontSize: "0.88rem", color: "#6b6b78", marginBottom: 36 }}>
-          Ministry Intelligence Platform
-        </p>
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <h1
+            style={{
+              fontSize: "2rem",
+              fontWeight: 700,
+              color: "#1d1d1f",
+              letterSpacing: "-0.04em",
+              margin: "0 0 4px",
+            }}
+          >
+            Sozo
+          </h1>
+          <p style={{ fontSize: "0.84rem", color: "#86868b", margin: 0 }}>
+            Ministry Intelligence Platform
+          </p>
+        </div>
 
-        {/* Microsoft Sign In */}
-        <form
-          action={async () => {
-            "use server";
-            await signIn("microsoft-entra-id", { redirectTo: "/" });
-          }}
-        >
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 16 }}>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Username"
+              autoComplete="username"
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                fontSize: "0.88rem",
+                borderRadius: 12,
+                border: "1px solid rgba(0, 0, 0, 0.12)",
+                background: "#f5f5f7",
+                outline: "none",
+                color: "#1d1d1f",
+                transition: "border-color 150ms ease",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "#0071e3";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "rgba(0, 0, 0, 0.12)";
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              autoComplete="current-password"
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                fontSize: "0.88rem",
+                borderRadius: 12,
+                border: "1px solid rgba(0, 0, 0, 0.12)",
+                background: "#f5f5f7",
+                outline: "none",
+                color: "#1d1d1f",
+                transition: "border-color 150ms ease",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "#0071e3";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "rgba(0, 0, 0, 0.12)";
+              }}
+            />
+          </div>
+
+          {error && (
+            <p
+              style={{
+                fontSize: "0.78rem",
+                color: "#ff3b30",
+                textAlign: "center",
+                margin: "0 0 16px",
+              }}
+            >
+              {error}
+            </p>
+          )}
+
           <button
             type="submit"
+            disabled={loading || !username.trim() || !password.trim()}
             style={{
               width: "100%",
               padding: "12px 24px",
               fontSize: "0.88rem",
               fontWeight: 500,
               color: "#fff",
-              background:
-                "linear-gradient(135deg, #0693e3 0%, #9b51e0 100%)",
+              background: "#0071e3",
               border: "none",
-              borderRadius: 9999,
+              borderRadius: 12,
+              cursor: loading ? "wait" : "pointer",
+              transition: "opacity 150ms ease",
+              opacity: loading ? 0.6 : 1,
+            }}
+          >
+            {loading ? "Signing in..." : "Sign In"}
+          </button>
+        </form>
+
+        <div
+          style={{
+            margin: "24px 0 0",
+            textAlign: "center",
+            borderTop: "1px solid rgba(0, 0, 0, 0.06)",
+            paddingTop: 20,
+          }}
+        >
+          <button
+            onClick={() => signIn("microsoft-entra-id", { callbackUrl: "/" })}
+            style={{
+              background: "none",
+              border: "1px solid rgba(0, 0, 0, 0.12)",
+              borderRadius: 12,
+              padding: "10px 20px",
+              fontSize: "0.82rem",
+              color: "#6e6e73",
               cursor: "pointer",
-              transition: "opacity 200ms ease",
-              letterSpacing: "-0.01em",
-              marginBottom: 12,
+              width: "100%",
+              transition: "all 150ms ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "rgba(0, 0, 0, 0.2)";
+              e.currentTarget.style.color = "#1d1d1f";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "rgba(0, 0, 0, 0.12)";
+              e.currentTarget.style.color = "#6e6e73";
             }}
           >
             Sign in with Microsoft
           </button>
-        </form>
+        </div>
 
-        {/* Google Sign In */}
-        <form
-          action={async () => {
-            "use server";
-            await signIn("google", { redirectTo: "/" });
+        <p
+          style={{
+            fontSize: "0.68rem",
+            color: "#86868b",
+            textAlign: "center",
+            marginTop: 24,
+            marginBottom: 0,
           }}
         >
-          <button
-            type="submit"
-            style={{
-              width: "100%",
-              padding: "12px 24px",
-              fontSize: "0.88rem",
-              fontWeight: 500,
-              color: "#e8e8ed",
-              background: "rgba(255, 255, 255, 0.06)",
-              border: "1px solid rgba(255, 255, 255, 0.12)",
-              borderRadius: 9999,
-              cursor: "pointer",
-              transition: "all 200ms ease",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            Sign in with Google
-          </button>
-        </form>
-
-        <p style={{ fontSize: "0.72rem", color: "#6b6b78", marginTop: 28 }}>
           Pure Freedom Ministries
         </p>
       </div>

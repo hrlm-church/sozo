@@ -92,8 +92,8 @@ export function SuggestedPrompts({ onSelect }: SuggestedPromptsProps) {
               gap: 10,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(6, 147, 227, 0.08)";
-              e.currentTarget.style.borderColor = "rgba(6, 147, 227, 0.25)";
+              e.currentTarget.style.background = "rgba(0, 113, 227, 0.04)";
+              e.currentTarget.style.borderColor = "rgba(0, 113, 227, 0.2)";
               e.currentTarget.style.color = "var(--text-primary)";
             }}
             onMouseLeave={(e) => {

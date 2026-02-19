@@ -97,7 +97,7 @@ function CustomTooltipContent({ active, payload, label }: {
 export function ChartTooltip(props: ComponentProps<typeof RechartsTooltip>) {
   return (
     <RechartsTooltip
-      cursor={{ fill: "rgba(6,147,227,0.12)" }}
+      cursor={{ fill: "rgba(0,113,227,0.06)" }}
       content={<CustomTooltipContent />}
       {...props}
     />

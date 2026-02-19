@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
-import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -14,9 +14,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // Use state check instead of PKCE to avoid "pkceCodeVerifier could not be parsed" errors
       checks: ["state"],
     }),
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
+    Credentials({
+      credentials: {
+        username: {},
+        password: {},
+      },
+      async authorize(credentials) {
+        const validUser = process.env.AUTH_USERNAME || "sozo";
+        const validPass = process.env.AUTH_PASSWORD || "sozo2025";
+
+        if (
+          credentials?.username === validUser &&
+          credentials?.password === validPass
+        ) {
+          return {
+            id: "shared-user",
+            name: String(credentials.username),
+            email: `${credentials.username}@sozo.local`,
+          };
+        }
+        return null;
+      },
     }),
   ],
   pages: {
