@@ -740,6 +740,476 @@ const STEPS = [
       }, 'original_files_from_donor_direct.Data_Entered_PFM_AccountAddresses_csv');
     }
   },
+
+  // ══════════════════════════════════════════════════════════════
+  // NEW SOURCES (Steps 25-36): Mailchimp, Stripe, WooCommerce,
+  // Tickera, Subbly, Shopify
+  // ══════════════════════════════════════════════════════════════
+
+  // ── STEP 25: Mailchimp → silver.contact (5 audience files) ──
+  {
+    name: 'Mailchimp → silver.contact',
+    run: async (pool) => {
+      const cols = 'source_system, source_id, first_name, last_name, email_primary, phone_primary, phone_2, address_line1, state, postal_code, created_at, updated_at';
+      const tables = [
+        'mailchimp.sms_only_audience',
+        'mailchimp.cleaned_email_audience',
+        'mailchimp.unsubscribed_email_audience',
+        'mailchimp.subscribed_email_audience',
+        'mailchimp.nonsubscribed_email_audience',
+      ];
+      let total = 0;
+      for (const t of tables) {
+        try {
+          const cnt = await batchInsert(pool, 'silver.contact', cols, (r) => {
+            if (!clean(r.Email_Address) && !clean(r.First_Name)) return null;
+            return [
+              lit('mailchimp'), lit(r.LEID),
+              lit(clean(r.First_Name)), lit(clean(r.Last_Name)),
+              lit(clean(r.Email_Address)),
+              lit(clean(r.Phone_Number)), lit(clean(r.SMS_Phone_Number)),
+              lit(trunc(r.Street_Address, 500)),
+              lit(clean(r.State)), lit(clean(r.Zip_Code)),
+              dt(r.OPTIN_TIME), dt(r.LAST_CHANGED)
+            ].join(', ');
+          }, t);
+          total += cnt;
+          console.log(`      ${t}: ${cnt.toLocaleString()}`);
+        } catch (err) {
+          console.log(`      ${t}: ${err.message.substring(0, 80)}`);
+        }
+      }
+      return total;
+    }
+  },
+
+  // ── STEP 26: Mailchimp Tags → silver.generic_tag ──
+  {
+    name: 'Mailchimp Tags → silver.generic_tag',
+    run: async (pool) => {
+      const cols = 'source_system, contact_source_id, tag_value, tag_category';
+      const tables = [
+        'mailchimp.sms_only_audience',
+        'mailchimp.cleaned_email_audience',
+        'mailchimp.unsubscribed_email_audience',
+        'mailchimp.subscribed_email_audience',
+        'mailchimp.nonsubscribed_email_audience',
+      ];
+      let total = 0;
+      for (const t of tables) {
+        try {
+          let lastId = 0;
+          while (true) {
+            const res = await pool.request().query(
+              `SELECT TOP ${BATCH_READ} _row_id, LEID, TAGS FROM ${t} WHERE _row_id > ${lastId} ORDER BY _row_id`
+            );
+            if (res.recordset.length === 0) break;
+            lastId = res.recordset[res.recordset.length - 1]._row_id;
+
+            const rows = [];
+            for (const r of res.recordset) {
+              if (!r.TAGS) continue;
+              const tags = r.TAGS.split(',').map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
+              for (const tag of tags) {
+                rows.push(`(${[lit('mailchimp'), lit(r.LEID), lit(trunc(tag, 500)), lit('Mailchimp Audience')].join(', ')})`);
+              }
+            }
+
+            for (let i = 0; i < rows.length; i += BATCH_WRITE) {
+              const chunk = rows.slice(i, i + BATCH_WRITE);
+              try {
+                await pool.request().query(`INSERT INTO silver.generic_tag (${cols}) VALUES ${chunk.join(',\n')}`);
+              } catch (err) {
+                for (const r of chunk) {
+                  try { await pool.request().query(`INSERT INTO silver.generic_tag (${cols}) VALUES ${r}`); } catch {}
+                }
+              }
+              await wait(WAIT_MS);
+            }
+            total += rows.length;
+            if (total % 5000 < BATCH_READ) process.stdout.write(`    ${total.toLocaleString()} tags...\r`);
+          }
+        } catch (err) {
+          console.log(`      ${t}: ${err.message.substring(0, 80)}`);
+        }
+      }
+      return total;
+    }
+  },
+
+  // ── STEP 27: Stripe Charges → silver.stripe_charge (7 yearly files) ──
+  {
+    name: 'Stripe Charges → silver.stripe_charge',
+    run: async (pool) => {
+      const cols = 'stripe_charge_id, customer_id, customer_email, customer_name, amount, amount_refunded, currency, status, description, fee, created_at, card_brand, card_last4, card_funding, statement_desc, refunded_at, disputed_amount, meta_source, meta_from_app, meta_order_id, meta_order_key, meta_site_url, checkout_summary, source_file';
+      const tables = [
+        { src: 'stripe_charges.[2020_Stripe]', year: '2020' },
+        { src: 'stripe_charges.[2021_Stripe]', year: '2021' },
+        { src: 'stripe_charges.[2022_Stripe]', year: '2022' },
+        { src: 'stripe_charges.[2023_Stripe]', year: '2023' },
+        { src: 'stripe_charges.[2024_Stripe]', year: '2024' },
+        { src: 'stripe_charges.[2025_Stripe]', year: '2025' },
+        { src: 'stripe_charges.[2026_Stripe]', year: '2026' },
+      ];
+      let total = 0;
+      for (const { src, year } of tables) {
+        try {
+          const cnt = await batchInsert(pool, 'silver.stripe_charge', cols, (r) => {
+            return [
+              lit(clean(r.id)),
+              lit(clean(r.Customer_ID)),
+              lit(clean(r.Customer_Email)),
+              lit(clean(r.Customer_Description) || clean(r.customer_name_metadata)),
+              amt(r.Amount), amt(r.Amount_Refunded),
+              lit(clean(r.Currency)), lit(clean(r.Status)),
+              lit(trunc(r.Description, 2000)), amt(r.Fee),
+              dt(r.Created_date_UTC),
+              lit(clean(r.Card_Brand)), lit(clean(r.Card_Last4)),
+              lit(clean(r.Card_Funding)),
+              lit(trunc(r.Statement_Descriptor, 200)),
+              dt(r.Refunded_date_UTC),
+              amt(r.Disputed_Amount),
+              lit(trunc(r.source_metadata, 200)),
+              lit(trunc(r.from_app_metadata, 200)),
+              lit(trunc(r.order_id_metadata, 200)),
+              lit(trunc(r.OrderKey_metadata, 200)),
+              lit(trunc(r.site_url_metadata, 500)),
+              lit(trunc(r.Checkout_Line_Item_Summary || r.line_items_metadata, 2000)),
+              lit(year)
+            ].join(', ');
+          }, src);
+          total += cnt;
+          console.log(`      ${src}: ${cnt.toLocaleString()}`);
+        } catch (err) {
+          console.log(`      ${src}: ${err.message.substring(0, 80)}`);
+        }
+      }
+      return total;
+    }
+  },
+
+  // ── STEP 28: WooCommerce Customers → silver.contact ──
+  {
+    name: 'WooCommerce Customers → silver.contact',
+    run: async (pool) => {
+      const cols = 'source_system, source_id, first_name, last_name, email_primary, city, state, postal_code, country';
+      return batchInsert(pool, 'silver.contact', cols, (r) => {
+        const email = clean(r.Email);
+        if (!email) return null;
+        const name = clean(r.Name) || '';
+        const parts = name.split(/\s+/);
+        const fn = parts[0] || null;
+        const ln = parts.slice(1).join(' ') || null;
+        return [
+          lit('woocommerce'), lit(email),
+          lit(fn), lit(ln), lit(email),
+          lit(clean(r.City)), lit(clean(r.Region)),
+          lit(clean(r.Postal_Code)), lit(clean(r.Country_Region))
+        ].join(', ');
+      }, 'woocommerce.customers');
+    }
+  },
+
+  // ── STEP 29: WooCommerce Orders → silver.woo_order ──
+  {
+    name: 'WooCommerce Orders → silver.woo_order',
+    run: async (pool) => {
+      const cols = 'order_number, customer_name, customer_email, order_date, revenue, net_sales, status, product_name, items_sold, coupon, customer_type, attribution, city, region, postal_code';
+      return batchInsert(pool, 'silver.woo_order', cols, (r) => {
+        return [
+          lit(clean(r.Order)),
+          lit(clean(r.Customer)), lit(clean(r.Email)),
+          dt(r.Date),
+          amt(r.N_Revenue_formatted), amt(r.Net_Sales),
+          lit(clean(r.Status)),
+          lit(trunc(r.Products, 1000)),
+          int(r.Items_sold),
+          lit(trunc(r.Coupons, 200)),
+          lit(clean(r.Customer_type)),
+          lit(trunc(r.Attribution, 500)),
+          lit(clean(r.City)), lit(clean(r.Region)),
+          lit(clean(r.Postal_Code))
+        ].join(', ');
+      }, 'woocommerce.order_lines');
+    }
+  },
+
+  // ── STEP 30: Tickera Tickets → silver.event_ticket ──
+  {
+    name: 'Tickera Tickets → silver.event_ticket',
+    run: async (pool) => {
+      const cols = 'event_name, attendee_first, attendee_last, attendee_name, attendee_email, buyer_first, buyer_last, buyer_name, buyer_email, payment_date, order_number, payment_gateway, order_status, order_total, ticket_total, ticket_type, ticket_code, checked_in, price, city, state, postal_code, country, phone, coupon_code';
+      return batchInsert(pool, 'silver.event_ticket', cols, (r) => {
+        // Parse "October 24, 2025 - 5:36 pm" format
+        let payDt = 'NULL';
+        if (clean(r.Payment_Date)) {
+          const s = r.Payment_Date.trim();
+          const m = s.match(/^(\w+)\s+(\d{1,2}),?\s+(\d{4})\s*[-–]\s*(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
+          if (m) {
+            const months = {january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12};
+            const mon = months[m[1].toLowerCase()];
+            if (mon) {
+              let h = parseInt(m[4]);
+              const min = parseInt(m[5]);
+              if (m[6] && m[6].toLowerCase() === 'pm' && h < 12) h += 12;
+              if (m[6] && m[6].toLowerCase() === 'am' && h === 12) h = 0;
+              const pad = n => String(n).padStart(2, '0');
+              payDt = `N'${m[3]}-${pad(mon)}-${pad(parseInt(m[2]))}T${pad(h)}:${pad(min)}:00'`;
+            }
+          } else {
+            payDt = dt(r.Payment_Date);
+          }
+        }
+        return [
+          lit(trunc(r.Event_Name, 500)),
+          lit(clean(r.First_Name)), lit(clean(r.Last_Name)),
+          lit(clean(r.Name)), lit(clean(r.Attendee_Email)),
+          lit(clean(r.Buyer_First_Name)), lit(clean(r.Buyer_Last_Name)),
+          lit(clean(r.Buyer_Name)), lit(clean(r.Buyer_EMail)),
+          payDt,
+          lit(clean(r.Order_Number) ? r.Order_Number.replace(/^#/, '') : null),
+          lit(clean(r.Payment_Gateway)),
+          lit(clean(r.Order_Status)),
+          amt(r.Order_Total), amt(r.Ticket_Total),
+          lit(trunc(r.Ticket_Type, 500)),
+          lit(clean(r.Ticket_Code)),
+          bit(r.Checkedin),
+          amt(r.Price),
+          lit(clean(r.City)), lit(clean(r.State)),
+          lit(clean(r.Postcode)), lit(clean(r.Country)),
+          lit(clean(r.Phone)),
+          lit(clean(r.Coupon_Code))
+        ].join(', ');
+      }, 'tickera.tickets');
+    }
+  },
+
+  // ── STEP 31: Tickera → silver.contact (unique buyers + attendees) ──
+  {
+    name: 'Tickera → silver.contact',
+    run: async (pool) => {
+      // Extract unique contacts from Tickera: prefer buyer info (has address), then attendee
+      // Deduplicate by email within this step
+      const cols = 'source_system, source_id, first_name, last_name, email_primary, phone_primary, address_line1, city, state, postal_code, country';
+      const seen = new Set();
+      let lastId = 0;
+      let total = 0;
+
+      while (true) {
+        const res = await pool.request().query(
+          `SELECT TOP ${BATCH_READ} * FROM tickera.tickets WHERE _row_id > ${lastId} ORDER BY _row_id`
+        );
+        if (res.recordset.length === 0) break;
+        lastId = res.recordset[res.recordset.length - 1]._row_id;
+
+        const rows = [];
+        for (const r of res.recordset) {
+          // Buyer contact
+          const buyerEmail = (r.Buyer_EMail || '').trim().toLowerCase();
+          if (buyerEmail && !seen.has(buyerEmail)) {
+            seen.add(buyerEmail);
+            rows.push(`(${[
+              lit('tickera'), lit(buyerEmail),
+              lit(clean(r.Buyer_First_Name)), lit(clean(r.Buyer_Last_Name)),
+              lit(buyerEmail),
+              lit(clean(r.Phone)),
+              lit(trunc(r.Address_Line_1, 500)),
+              lit(clean(r.City)), lit(clean(r.State)),
+              lit(clean(r.Postcode)), lit(clean(r.Country))
+            ].join(', ')})`);
+          }
+          // Attendee contact (if different from buyer)
+          const attEmail = (r.Attendee_Email || '').trim().toLowerCase();
+          if (attEmail && !seen.has(attEmail)) {
+            seen.add(attEmail);
+            rows.push(`(${[
+              lit('tickera'), lit(attEmail),
+              lit(clean(r.First_Name)), lit(clean(r.Last_Name)),
+              lit(attEmail),
+              'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL'
+            ].join(', ')})`);
+          }
+        }
+
+        for (let i = 0; i < rows.length; i += BATCH_WRITE) {
+          const chunk = rows.slice(i, i + BATCH_WRITE);
+          try {
+            await pool.request().query(`INSERT INTO silver.contact (${cols}) VALUES ${chunk.join(',\n')}`);
+          } catch (err) {
+            for (const rv of chunk) {
+              try { await pool.request().query(`INSERT INTO silver.contact (${cols}) VALUES ${rv}`); } catch {}
+            }
+          }
+          await wait(WAIT_MS);
+        }
+        total += rows.length;
+        if (total % 5000 < BATCH_READ) process.stdout.write(`    ${total.toLocaleString()} contacts...\r`);
+      }
+      return total;
+    }
+  },
+
+  // ── STEP 32: Subbly Customers → silver.contact ──
+  {
+    name: 'Subbly Customers → silver.contact',
+    run: async (pool) => {
+      const cols = 'source_system, source_id, first_name, last_name, email_primary, phone_primary, created_at';
+      return batchInsert(pool, 'silver.contact', cols, (r) => {
+        const email = clean(r.Email);
+        if (!email) return null;
+        const name = clean(r.Name) || '';
+        const parts = name.split(/\s+/);
+        const fn = parts[0] || null;
+        const ln = parts.slice(1).join(' ') || null;
+        return [
+          lit('subbly'), lit(r.Customer_ID),
+          lit(fn), lit(ln), lit(email),
+          lit(clean(r.Phone_numbers)),
+          dt(r.Signed_up)
+        ].join(', ');
+      }, 'subbly.customers');
+    }
+  },
+
+  // ── STEP 33: Subbly Subscriptions → silver.subbly_subscription ──
+  {
+    name: 'Subbly Subscriptions → silver.subbly_subscription',
+    run: async (pool) => {
+      const cols = 'subbly_sub_id, customer_id, customer_name, customer_email, product_name, status, past_due, renewal_date, date_created, date_cancelled, cancellation_reason, cancel_feedback, shipping_method, shipping_price, currency_code, address_line1, city, state, postal_code, country, phone, girl_name, girl_birthday, orders_count, paused, discount';
+      return batchInsert(pool, 'silver.subbly_subscription', cols, (r) => {
+        // Find girl name from the long survey column names
+        const girlNameKey = Object.keys(r).find(k => k.toLowerCase().includes('girl') && k.toLowerCase().includes('name'));
+        const girlName = girlNameKey ? clean(r[girlNameKey]) : null;
+        return [
+          int(r.Subscription_ID), int(r.Customer_ID),
+          lit(clean(r.Name)), lit(clean(r.Email)),
+          lit(trunc(r.Product_Name, 500)),
+          lit(clean(r.Status)),
+          bit(r.Past_Due),
+          dtDate(r.Renewal_Date), dt(r.Date_Created),
+          dt(r.Date_Cancelled),
+          lit(trunc(r.Cancellation_Reason, 1000)),
+          lit(trunc(r.Cancellation_Extra_Feedback, 2000)),
+          lit(clean(r.Shipping_Method_Name)),
+          amt(r.Shipping_Method_Price),
+          lit(clean(r.Currency_Code)),
+          lit(trunc(r.Address_1, 500)),
+          lit(clean(r.City)), lit(clean(r.State)),
+          lit(clean(r.Zip)), lit(clean(r.Country)),
+          lit(clean(r.Phone_Number)),
+          lit(trunc(girlName, 200)),
+          lit(clean(r.What_is_her_birthday)),
+          int(r.Orders_Count),
+          bit(r.Paused),
+          lit(clean(r.Discount))
+        ].join(', ');
+      }, 'subbly.subscriptions');
+    }
+  },
+
+  // ── STEP 34: Shopify Customers → silver.contact ──
+  {
+    name: 'Shopify Customers → silver.contact',
+    run: async (pool) => {
+      const cols = 'source_system, source_id, first_name, last_name, email_primary, phone_primary, address_line1, address_line2, city, state, postal_code, country, accepts_marketing';
+      return batchInsert(pool, 'silver.contact', cols, (r) => {
+        const email = clean(r.Email);
+        if (!email && !clean(r.First_Name)) return null;
+        // Customer_ID may have leading apostrophe in data
+        const custId = (r.Customer_ID || '').replace(/^'/, '').trim();
+        return [
+          lit('shopify'), lit(custId || email),
+          lit(clean(r.First_Name)), lit(clean(r.Last_Name)),
+          lit(email),
+          lit(clean(r.Phone) || clean(r.Default_Address_Phone)),
+          lit(trunc(r.Default_Address_Address1, 500)),
+          lit(trunc(r.Default_Address_Address2, 500)),
+          lit(clean(r.Default_Address_City)),
+          lit(clean(r.Default_Address_Province_Code)),
+          lit(clean(r.Default_Address_Zip)),
+          lit(clean(r.Default_Address_Country_Code)),
+          bit(r.Accepts_Email_Marketing)
+        ].join(', ');
+      }, 'shopify.customers');
+    }
+  },
+
+  // ── STEP 35: Shopify Orders → silver.shopify_order ──
+  {
+    name: 'Shopify Orders → silver.shopify_order',
+    run: async (pool) => {
+      const cols = 'order_name, customer_email, financial_status, paid_at, fulfillment_status, currency, subtotal, shipping, taxes, total, discount_code, discount_amount, line_item_name, line_item_price, line_item_qty, vendor, billing_city, billing_state, billing_zip, shipping_city, shipping_state, shipping_zip, tags, source, risk_level, created_at';
+      return batchInsert(pool, 'silver.shopify_order', cols, (r) => {
+        return [
+          lit(clean(r.Name)),
+          lit(clean(r.Email)),
+          lit(clean(r.Financial_Status)),
+          dt(r.Paid_at),
+          lit(clean(r.Fulfillment_Status)),
+          lit(clean(r.Currency)),
+          amt(r.Subtotal), amt(r.Shipping), amt(r.Taxes), amt(r.Total),
+          lit(clean(r.Discount_Code)), amt(r.Discount_Amount),
+          lit(trunc(r.Lineitem_name, 1000)),
+          amt(r.Lineitem_price),
+          int(r.Lineitem_quantity),
+          lit(trunc(r.Vendor, 200)),
+          lit(clean(r.Billing_City)),
+          lit(clean(r.Billing_Province)),
+          lit(clean(r.Billing_Zip)),
+          lit(clean(r.Shipping_City)),
+          lit(clean(r.Shipping_Province)),
+          lit(clean(r.Shipping_Zip)),
+          lit(trunc(r.Tags, 2000)),
+          lit(trunc(r.Source, 200)),
+          lit(clean(r.Risk_Level)),
+          dt(r.Created_at)
+        ].join(', ');
+      }, 'shopify.order_lines');
+    }
+  },
+
+  // ── STEP 36: Shopify Tags → silver.generic_tag ──
+  {
+    name: 'Shopify Tags → silver.generic_tag',
+    run: async (pool) => {
+      const cols = 'source_system, contact_source_id, tag_value, tag_category';
+      let lastId = 0;
+      let total = 0;
+
+      while (true) {
+        const res = await pool.request().query(
+          `SELECT TOP ${BATCH_READ} _row_id, Customer_ID, Tags FROM shopify.customers WHERE _row_id > ${lastId} ORDER BY _row_id`
+        );
+        if (res.recordset.length === 0) break;
+        lastId = res.recordset[res.recordset.length - 1]._row_id;
+
+        const rows = [];
+        for (const r of res.recordset) {
+          if (!r.Tags) continue;
+          const custId = (r.Customer_ID || '').replace(/^'/, '').trim();
+          const tags = r.Tags.split(',').map(s => s.trim()).filter(Boolean);
+          for (const tag of tags) {
+            rows.push(`(${[lit('shopify'), lit(custId), lit(trunc(tag, 500)), lit('Shopify Customer')].join(', ')})`);
+          }
+        }
+
+        for (let i = 0; i < rows.length; i += BATCH_WRITE) {
+          const chunk = rows.slice(i, i + BATCH_WRITE);
+          try {
+            await pool.request().query(`INSERT INTO silver.generic_tag (${cols}) VALUES ${chunk.join(',\n')}`);
+          } catch (err) {
+            for (const rv of chunk) {
+              try { await pool.request().query(`INSERT INTO silver.generic_tag (${cols}) VALUES ${rv}`); } catch {}
+            }
+          }
+          await wait(WAIT_MS);
+        }
+        total += rows.length;
+        if (total % 5000 < BATCH_READ) process.stdout.write(`    ${total.toLocaleString()} tags...\r`);
+      }
+      return total;
+    }
+  },
 ];
 
 // Fix step 16 — Keap Orders (was broken)

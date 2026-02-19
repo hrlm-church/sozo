@@ -317,7 +317,7 @@ async function main() {
     // Pick primary: prefer keap (most data), then dd, then gb
     const contactsInCluster = ids.map(id => allContacts.find(c => c.contact_id === id)).filter(Boolean);
     contactsInCluster.sort((a, b) => {
-      const order = { keap: 0, donor_direct: 1, givebutter: 2 };
+      const order = { keap: 0, donor_direct: 1, givebutter: 2, woocommerce: 3, shopify: 4, subbly: 5, tickera: 6, mailchimp: 7 };
       return (order[a.source_system] ?? 3) - (order[b.source_system] ?? 3);
     });
 
@@ -390,7 +390,7 @@ async function main() {
       c.source_system AS primary_source,
       c.created_at,
       (SELECT COUNT(DISTINCT im2.source_system) FROM silver.identity_map im2 WHERE im2.master_id = im.master_id) AS source_count,
-      (SELECT STRING_AGG(DISTINCT im2.source_system, ', ') FROM silver.identity_map im2 WHERE im2.master_id = im.master_id) AS source_systems
+      (SELECT STRING_AGG(ss, ', ') FROM (SELECT DISTINCT im2.source_system AS ss FROM silver.identity_map im2 WHERE im2.master_id = im.master_id) x) AS source_systems
     FROM silver.identity_map im
     JOIN silver.contact c ON c.contact_id = im.contact_id
     WHERE im.is_primary = 1

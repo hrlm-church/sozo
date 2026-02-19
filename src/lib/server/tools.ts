@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { guardSql, QUERY_TIMEOUT_MS } from "@/lib/server/sql-guard";
 import { executeSql } from "@/lib/server/sql-client";
+import { hybridSearch } from "@/lib/server/search-client";
 import type { Widget, WidgetType, WidgetConfig } from "@/types/widget";
 
 /**
@@ -54,6 +55,57 @@ export function getChatTools() {
           data: result.rows,
           sql: guard.sanitized,
           purpose,
+        };
+      },
+    }),
+
+    search_data: tool({
+      description:
+        "Semantic search across all ministry person profiles using AI embeddings. " +
+        "Use this for qualitative/discovery questions: finding people by behavior patterns, " +
+        "searching across tags/events/notes, or discovering relationships. " +
+        "Returns the most relevant person profiles ranked by semantic similarity. " +
+        "Use query_data (SQL) for quantitative questions (counts, sums, trends, rankings). " +
+        "Use this tool for questions like 'find donors interested in Bible studies', " +
+        "'who are our most multi-channel supporters', 'contacts similar to [name]'.",
+      inputSchema: z.object({
+        query: z.string().describe("Natural language search query describing what you're looking for"),
+        top: z.number().optional().default(10).describe("Number of results to return (1-50)"),
+        filter: z.string().optional().describe("Optional OData filter (e.g. \"lifecycle_stage eq 'active'\", \"giving_total gt 1000\")"),
+      }),
+      execute: async ({ query, top, filter }) => {
+        const result = await hybridSearch(query, Math.min(top ?? 10, 50), filter);
+        if (!result.ok) {
+          return { ok: false as const, error: result.error, results: [] };
+        }
+        // Store results for show_widget to use
+        lastQueryRows = result.results.map((r) => ({
+          display_name: r.display_name,
+          email: r.email,
+          location: r.location,
+          lifecycle_stage: r.lifecycle_stage,
+          giving_total: r.giving_total,
+          order_count: r.order_count,
+          event_count: r.event_count,
+          has_subscription: r.has_subscription,
+          relevance: Math.round(r.score * 100) / 100,
+          profile: r.content.slice(0, 500),
+        }));
+        lastQuerySql = `[Semantic Search: "${query}"]`;
+        return {
+          ok: true as const,
+          totalCount: result.totalCount,
+          results: result.results.map((r) => ({
+            display_name: r.display_name,
+            email: r.email,
+            location: r.location,
+            lifecycle_stage: r.lifecycle_stage,
+            giving_total: r.giving_total,
+            order_count: r.order_count,
+            event_count: r.event_count,
+            has_subscription: r.has_subscription,
+            profile_summary: r.content.slice(0, 800),
+          })),
         };
       },
     }),

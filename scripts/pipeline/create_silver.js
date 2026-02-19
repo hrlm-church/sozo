@@ -328,10 +328,170 @@ const TABLES = [
       is_active         BIT
     )`
   },
+
+  // ── NEW SOURCE TABLES ───────────────────────────────────
+  {
+    name: 'silver.stripe_charge',
+    ddl: `CREATE TABLE silver.stripe_charge (
+      charge_id        INT IDENTITY(1,1) PRIMARY KEY,
+      stripe_charge_id VARCHAR(100),
+      customer_id      VARCHAR(100),
+      customer_email   NVARCHAR(500),
+      customer_name    NVARCHAR(500),
+      amount           DECIMAL(12,2),
+      amount_refunded  DECIMAL(12,2),
+      currency         VARCHAR(10),
+      status           VARCHAR(50),
+      description      NVARCHAR(2000),
+      fee              DECIMAL(12,2),
+      created_at       DATETIME2,
+      card_brand       VARCHAR(50),
+      card_last4       VARCHAR(10),
+      card_funding     VARCHAR(20),
+      statement_desc   NVARCHAR(200),
+      refunded_at      DATETIME2,
+      disputed_amount  DECIMAL(12,2),
+      meta_source      NVARCHAR(200),
+      meta_from_app    NVARCHAR(200),
+      meta_order_id    NVARCHAR(200),
+      meta_order_key   NVARCHAR(200),
+      meta_site_url    NVARCHAR(500),
+      checkout_summary NVARCHAR(2000),
+      source_file      VARCHAR(50)
+    )`
+  },
+  {
+    name: 'silver.woo_order',
+    ddl: `CREATE TABLE silver.woo_order (
+      woo_order_id   INT IDENTITY(1,1) PRIMARY KEY,
+      order_number   VARCHAR(50),
+      customer_name  NVARCHAR(500),
+      customer_email NVARCHAR(500),
+      order_date     DATETIME2,
+      revenue        DECIMAL(12,2),
+      net_sales      DECIMAL(12,2),
+      status         VARCHAR(50),
+      product_name   NVARCHAR(1000),
+      items_sold     INT,
+      coupon         NVARCHAR(200),
+      customer_type  VARCHAR(50),
+      attribution    NVARCHAR(500),
+      city           NVARCHAR(200),
+      region         NVARCHAR(100),
+      postal_code    NVARCHAR(20)
+    )`
+  },
+  {
+    name: 'silver.event_ticket',
+    ddl: `CREATE TABLE silver.event_ticket (
+      ticket_id       INT IDENTITY(1,1) PRIMARY KEY,
+      event_name      NVARCHAR(500),
+      attendee_first  NVARCHAR(200),
+      attendee_last   NVARCHAR(200),
+      attendee_name   NVARCHAR(500),
+      attendee_email  NVARCHAR(500),
+      buyer_first     NVARCHAR(200),
+      buyer_last      NVARCHAR(200),
+      buyer_name      NVARCHAR(500),
+      buyer_email     NVARCHAR(500),
+      payment_date    DATETIME2,
+      order_number    VARCHAR(50),
+      payment_gateway VARCHAR(50),
+      order_status    VARCHAR(50),
+      order_total     DECIMAL(12,2),
+      ticket_total    DECIMAL(12,2),
+      ticket_type     NVARCHAR(500),
+      ticket_code     VARCHAR(100),
+      checked_in      BIT,
+      price           DECIMAL(12,2),
+      city            NVARCHAR(200),
+      state           NVARCHAR(100),
+      postal_code     NVARCHAR(20),
+      country         NVARCHAR(100),
+      phone           NVARCHAR(100),
+      coupon_code     NVARCHAR(200)
+    )`
+  },
+  {
+    name: 'silver.subbly_subscription',
+    ddl: `CREATE TABLE silver.subbly_subscription (
+      sub_id              INT IDENTITY(1,1) PRIMARY KEY,
+      subbly_sub_id       INT,
+      customer_id         INT,
+      customer_name       NVARCHAR(500),
+      customer_email      NVARCHAR(500),
+      product_name        NVARCHAR(500),
+      status              VARCHAR(50),
+      past_due            BIT,
+      renewal_date        DATE,
+      date_created        DATETIME2,
+      date_cancelled      DATETIME2,
+      cancellation_reason NVARCHAR(1000),
+      cancel_feedback     NVARCHAR(2000),
+      shipping_method     NVARCHAR(200),
+      shipping_price      DECIMAL(12,2),
+      currency_code       VARCHAR(10),
+      address_line1       NVARCHAR(500),
+      city                NVARCHAR(200),
+      state               NVARCHAR(100),
+      postal_code         NVARCHAR(20),
+      country             NVARCHAR(100),
+      phone               NVARCHAR(100),
+      girl_name           NVARCHAR(200),
+      girl_birthday       NVARCHAR(100),
+      orders_count        INT,
+      paused              BIT,
+      discount            NVARCHAR(200)
+    )`
+  },
+  {
+    name: 'silver.shopify_order',
+    ddl: `CREATE TABLE silver.shopify_order (
+      shopify_order_id   INT IDENTITY(1,1) PRIMARY KEY,
+      order_name         VARCHAR(50),
+      customer_email     NVARCHAR(500),
+      financial_status   VARCHAR(50),
+      paid_at            DATETIME2,
+      fulfillment_status VARCHAR(50),
+      currency           VARCHAR(10),
+      subtotal           DECIMAL(12,2),
+      shipping           DECIMAL(12,2),
+      taxes              DECIMAL(12,2),
+      total              DECIMAL(12,2),
+      discount_code      NVARCHAR(200),
+      discount_amount    DECIMAL(12,2),
+      line_item_name     NVARCHAR(1000),
+      line_item_price    DECIMAL(12,2),
+      line_item_qty      INT,
+      vendor             NVARCHAR(200),
+      billing_city       NVARCHAR(200),
+      billing_state      NVARCHAR(100),
+      billing_zip        NVARCHAR(20),
+      shipping_city      NVARCHAR(200),
+      shipping_state     NVARCHAR(100),
+      shipping_zip       NVARCHAR(20),
+      tags               NVARCHAR(2000),
+      source             NVARCHAR(200),
+      risk_level         VARCHAR(20),
+      created_at         DATETIME2
+    )`
+  },
+  {
+    name: 'silver.generic_tag',
+    ddl: `CREATE TABLE silver.generic_tag (
+      generic_tag_id    INT IDENTITY(1,1) PRIMARY KEY,
+      source_system     VARCHAR(20) NOT NULL,
+      contact_source_id VARCHAR(200),
+      tag_value         NVARCHAR(500) NOT NULL,
+      tag_category      NVARCHAR(200),
+      applied_at        DATETIME2
+    )`
+  },
 ];
 
 async function main() {
   loadEnv();
+  const newOnly = process.argv.includes('--new-only');
   const pool = await sql.connect({
     server: process.env.SOZO_SQL_HOST, database: 'sozov2',
     user: process.env.SOZO_SQL_USER, password: process.env.SOZO_SQL_PASSWORD,
@@ -351,9 +511,20 @@ async function main() {
     const shortName = t.name.replace('silver.', '').replace(/[\[\]]/g, '');
     console.log(`  ${t.name}...`);
     try {
-      await pool.request().query(
-        `IF OBJECT_ID('${t.name}', 'U') IS NOT NULL DROP TABLE ${t.name}`
-      );
+      if (newOnly) {
+        // Only create if it doesn't exist — preserve existing data
+        const exists = await pool.request().query(
+          `SELECT OBJECT_ID('${t.name}', 'U') AS oid`
+        );
+        if (exists.recordset[0].oid) {
+          console.log(`    SKIP (already exists, --new-only)`);
+          continue;
+        }
+      } else {
+        await pool.request().query(
+          `IF OBJECT_ID('${t.name}', 'U') IS NOT NULL DROP TABLE ${t.name}`
+        );
+      }
       await pool.request().query(t.ddl);
       console.log(`    OK`);
     } catch (err) {
@@ -383,6 +554,18 @@ async function main() {
     'CREATE INDEX ix_cemail_contact ON silver.contact_email (source_system, contact_source_id)',
     'CREATE INDEX ix_cphone_contact ON silver.contact_phone (source_system, contact_source_id)',
     'CREATE INDEX ix_caddr_contact ON silver.contact_address (source_system, contact_source_id)',
+    // New source indexes
+    'CREATE INDEX ix_stripe_charge_email ON silver.stripe_charge (customer_email)',
+    'CREATE INDEX ix_stripe_charge_date ON silver.stripe_charge (created_at)',
+    'CREATE INDEX ix_stripe_charge_status ON silver.stripe_charge (status)',
+    'CREATE INDEX ix_woo_order_email ON silver.woo_order (customer_email)',
+    'CREATE INDEX ix_woo_order_date ON silver.woo_order (order_date)',
+    'CREATE INDEX ix_event_ticket_buyer ON silver.event_ticket (buyer_email)',
+    'CREATE INDEX ix_event_ticket_attendee ON silver.event_ticket (attendee_email)',
+    'CREATE INDEX ix_subbly_sub_email ON silver.subbly_subscription (customer_email)',
+    'CREATE INDEX ix_shopify_order_email ON silver.shopify_order (customer_email)',
+    'CREATE INDEX ix_generic_tag_source ON silver.generic_tag (source_system, contact_source_id)',
+    'CREATE INDEX ix_generic_tag_value ON silver.generic_tag (tag_value)',
   ];
   for (const idx of indexes) {
     try {

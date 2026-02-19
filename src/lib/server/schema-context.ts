@@ -8,7 +8,7 @@ export const SCHEMA_CONTEXT = `
 ## Serving Views (pre-joined — NO JOINs needed)
 All views have person_id (internal key — NEVER show to users), display_name, email. T-SQL: TOP (N), never LIMIT.
 
-serving.person_360 (84K) — person_id, display_name, first_name, last_name, email, phone, city, state, postal_code, donation_count, lifetime_giving, avg_gift, largest_gift, first_gift_date, last_gift_date, recency_days, order_count, total_spent, tag_count, note_count, comm_count, lifecycle_stage ('prospect','active','cooling','lapsed','lost')
+serving.person_360 (120K+) — person_id, display_name, first_name, last_name, email, phone, city, state, postal_code, donation_count, lifetime_giving, avg_gift, largest_gift, first_gift_date, last_gift_date, recency_days, order_count, total_spent, woo_order_count, woo_total_spent, shopify_order_count, shopify_total_spent, ticket_count, subbly_sub_count, subbly_active, stripe_charge_count, stripe_total, tag_count, note_count, comm_count, lifecycle_stage ('prospect','active','cooling','lapsed','lost')
 
 serving.donor_summary (5K) — person_id, display_name, email, donation_count, total_given, avg_gift, largest_gift, first_gift_date, last_gift_date, days_since_last, fund_count, active_months, lifecycle_stage
 
@@ -16,13 +16,24 @@ serving.donor_monthly (62K) — person_id, display_name, donation_month (yyyy-MM
 
 serving.donation_detail (66K, 2014-2025) — donation_id, person_id, display_name, amount, donated_at, donation_month, donation_year, payment_method, fund, appeal, source_system
 
-serving.tag_detail (3M) — person_id, display_name, tag_value, tag_group, applied_at
-tag_group: 'Donor Assignment','True Girl','B2BB','Nurture Tags','True Productions','Customer Tags','Box Tracking',NULL
+serving.tag_detail (3M+) — person_id, display_name, tag_value, tag_group, applied_at, source_system ('keap','mailchimp','shopify')
+tag_group: 'Donor Assignment','True Girl','B2BB','Nurture Tags','True Productions','Customer Tags','Box Tracking','Mailchimp Audience','Shopify Customer',NULL
 
 serving.order_detail (205K) — order_id, person_id, display_name, total_amount, order_date, order_month, order_status
 serving.payment_detail (135K) — payment_id, person_id, display_name, amount, payment_date, payment_month, payment_method
 serving.invoice_detail (205K) — invoice_id, person_id, display_name, invoice_total, invoice_status, issued_at, invoice_month
-serving.subscription_detail (6K) — person_id, display_name, product_name, amount, cadence, subscription_status ('Active':41, 'Inactive':6.3K)
+serving.subscription_detail (8K+) — person_id, display_name, product_name, amount, cadence, subscription_status ('Active':41, 'Inactive':6.3K), source_system ('keap','subbly')
+USE FOR: includes both Keap subscriptions AND Subbly True Girl box subscriptions
+
+serving.event_detail (21K) — person_id, display_name, event_name, ticket_type, payment_date, event_month, event_year, order_total, ticket_total, price, checked_in, attendee_name, buyer_name, city, state
+USE FOR: "event attendance", "tour data", "ticket sales", "Pajama Party Tour", "Crazy Hair Tour", "pop-up parties"
+
+serving.stripe_charge_detail (163K) — person_id, display_name, email, stripe_charge_id, amount, amount_refunded, status, description, card_brand, card_last4, created_at, charge_month, charge_year, fee, meta_source, meta_from_app, meta_order_id, source_file
+USE FOR: "Stripe payments", "payment processing", "failed charges", "refunds", "payment gateway analysis", "revenue by year"
+
+serving.woo_order_detail (67K) — person_id, display_name, email, order_number, order_date, order_month, order_year, revenue, net_sales, status, product_name, items_sold, coupon, customer_type, attribution, city, state
+USE FOR: "WooCommerce orders", "website purchases", "product sales", "coupon usage", "customer acquisition"
+
 serving.household_360 (55K) — household_id, name, member_count, household_giving_total, giving_trend
 serving.communication_detail (24K) — person_id, display_name, channel, direction, subject, sent_at
 

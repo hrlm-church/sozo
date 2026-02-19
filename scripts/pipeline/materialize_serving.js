@@ -38,6 +38,10 @@ const VIEWS_IN_ORDER = [
   { name: 'subscription_detail', indexes: ['person_id', 'subscription_status'] },
   { name: 'tag_detail',          indexes: ['person_id', 'tag_group'] },
   { name: 'communication_detail', indexes: ['person_id', 'channel'] },
+  // New views for ingested sources
+  { name: 'event_detail',          indexes: ['person_id', 'event_name', 'event_year'] },
+  { name: 'stripe_charge_detail',  indexes: ['person_id', 'charge_month', 'status'] },
+  { name: 'woo_order_detail',      indexes: ['person_id', 'order_month'] },
 ];
 
 async function materializeView(pool, viewName, indexes) {

@@ -37,6 +37,17 @@ const ALLOWED_TABLES = new Set([
   "silver.contact_phone",
   "silver.contact_address",
   "silver.identity_map",
+  // New silver tables (6 new sources)
+  "silver.stripe_charge",
+  "silver.woo_order",
+  "silver.event_ticket",
+  "silver.subbly_subscription",
+  "silver.shopify_order",
+  "silver.generic_tag",
+  // New serving views
+  "serving.event_detail",
+  "serving.stripe_charge_detail",
+  "serving.woo_order_detail",
   // Gold layer (analytical views)
   "gold.constituent_360",
   "gold.person",
