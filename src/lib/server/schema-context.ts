@@ -22,8 +22,8 @@ tag_group: 'Donor Assignment','True Girl','B2BB','Nurture Tags','True Production
 serving.order_detail (205K) — order_id, person_id, display_name, total_amount, order_date, order_month, order_status
 serving.payment_detail (135K) — payment_id, person_id, display_name, amount, payment_date, payment_month, payment_method
 serving.invoice_detail (205K) — invoice_id, person_id, display_name, invoice_total, invoice_status, issued_at, invoice_month
-serving.subscription_detail (8K+) — person_id, display_name, product_name, amount, cadence, subscription_status ('Active':41, 'Inactive':6.3K), source_system ('keap','subbly')
-USE FOR: includes both Keap subscriptions AND Subbly True Girl box subscriptions
+serving.subscription_detail (8K+) — person_id, display_name, product_name, amount, cadence, subscription_status ('Active','Inactive'), source_system ('keap','subbly')
+IMPORTANT: Keap subscriptions are STALE (migrated to Subbly). ALWAYS filter: WHERE source_system = 'subbly' — Subbly is the ONLY valid subscription source.
 
 serving.event_detail (21K) — person_id, display_name, event_name, ticket_type, payment_date, event_month, event_year, order_total, ticket_total, price, checked_in, attendee_name, buyer_name, city, state
 USE FOR: "event attendance", "tour data", "ticket sales", "Pajama Party Tour", "Crazy Hair Tour", "pop-up parties"
