@@ -18,6 +18,7 @@ export function ChatPanel() {
   const pinnedIds = useMemo(() => new Set(widgets.map((w) => w.id)), [widgets]);
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [feedbackMap, setFeedbackMap] = useState<Record<string, number>>({});
 
   const conversationId = useConversationStore((s) => s.conversationId);
   const setConversationId = useConversationStore((s) => s.setConversationId);
@@ -179,6 +180,21 @@ export function ChatPanel() {
     sendMessage({ text: prompt });
   };
 
+  const handleFeedback = async (messageId: string, rating: number) => {
+    const prev = feedbackMap[messageId];
+    if (prev === rating) return; // already rated same
+    setFeedbackMap((m) => ({ ...m, [messageId]: rating }));
+    try {
+      await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: activeConvId, messageId, rating }),
+      });
+    } catch {
+      // silent — feedback is non-critical
+    }
+  };
+
   return (
     <div style={{ display: "flex", height: "100%" }}>
       {/* Conversation Sidebar */}
@@ -282,6 +298,73 @@ export function ChatPanel() {
                         }}
                       >
                         {text}
+                      </div>
+                    )}
+                    {message.role === "assistant" && text && (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 4,
+                          marginTop: 4,
+                          marginLeft: 4,
+                        }}
+                      >
+                        <button
+                          onClick={() => handleFeedback(message.id, 1)}
+                          title="Helpful"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                            padding: "2px 6px",
+                            borderRadius: 6,
+                            color:
+                              feedbackMap[message.id] === 1
+                                ? "#16a34a"
+                                : "var(--text-muted)",
+                            opacity: feedbackMap[message.id] === 1 ? 1 : 0.5,
+                            transition: "all 120ms ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (feedbackMap[message.id] !== 1)
+                              e.currentTarget.style.opacity = "1";
+                          }}
+                          onMouseLeave={(e) => {
+                            if (feedbackMap[message.id] !== 1)
+                              e.currentTarget.style.opacity = "0.5";
+                          }}
+                        >
+                          {feedbackMap[message.id] === 1 ? "\u{1F44D}" : "\u{1F44D}"}
+                        </button>
+                        <button
+                          onClick={() => handleFeedback(message.id, -1)}
+                          title="Not helpful"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                            padding: "2px 6px",
+                            borderRadius: 6,
+                            color:
+                              feedbackMap[message.id] === -1
+                                ? "#dc2626"
+                                : "var(--text-muted)",
+                            opacity: feedbackMap[message.id] === -1 ? 1 : 0.5,
+                            transition: "all 120ms ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (feedbackMap[message.id] !== -1)
+                              e.currentTarget.style.opacity = "1";
+                          }}
+                          onMouseLeave={(e) => {
+                            if (feedbackMap[message.id] !== -1)
+                              e.currentTarget.style.opacity = "0.5";
+                          }}
+                        >
+                          {feedbackMap[message.id] === -1 ? "\u{1F44E}" : "\u{1F44E}"}
+                        </button>
                       </div>
                     )}
                     {msgWidgets.map((widget) => {
