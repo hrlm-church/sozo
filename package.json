@@ -46,6 +46,8 @@
     "@auth/core": "^0.34.3",
     "@azure/storage-blob": "^12.31.0",
     "ai": "^6.0.81",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.0",
     "mssql": "^12.2.0",
     "nanoid": "^5.1.6",
     "next": "16.1.6",

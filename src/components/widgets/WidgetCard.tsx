@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useRef, type ReactNode } from "react";
 import type { Widget } from "@/types/widget";
+import { exportCSV, exportXLSX, exportPDF } from "@/lib/export";
 
 interface WidgetCardProps {
   widget: Widget;
@@ -13,9 +14,23 @@ interface WidgetCardProps {
 
 export function WidgetCard({ widget, children, onPin, onRemove, isPinned }: WidgetCardProps) {
   const [showSql, setShowSql] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const hasData = widget.data && widget.data.length > 0;
+
+  const handleExportCSV = () => { exportCSV(widget.data, widget.title); setShowExport(false); };
+  const handleExportXLSX = () => { exportXLSX(widget.data, widget.title); setShowExport(false); };
+  const handleExportPDF = async () => {
+    if (cardRef.current) {
+      await exportPDF(cardRef.current, widget.title);
+    }
+    setShowExport(false);
+  };
 
   return (
     <div
+      ref={cardRef}
       style={{
         height: "100%",
         display: "flex",
@@ -25,6 +40,7 @@ export function WidgetCard({ widget, children, onPin, onRemove, isPinned }: Widg
         boxShadow: "var(--shadow-sm)",
         overflow: "hidden",
         transition: "box-shadow 200ms ease",
+        position: "relative",
       }}
       onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-md)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "var(--shadow-sm)"; }}
@@ -42,6 +58,34 @@ export function WidgetCard({ widget, children, onPin, onRemove, isPinned }: Widg
             <WidgetBtn onClick={() => setShowSql(!showSql)} title="View SQL" active={showSql}>
               SQL
             </WidgetBtn>
+          )}
+          {hasData && (
+            <div style={{ position: "relative" }}>
+              <WidgetBtn onClick={() => setShowExport(!showExport)} title="Export data" active={showExport}>
+                Export
+              </WidgetBtn>
+              {showExport && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    right: 0,
+                    marginTop: 4,
+                    background: "#fff",
+                    borderRadius: 8,
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)",
+                    zIndex: 50,
+                    minWidth: 120,
+                    padding: "4px 0",
+                    border: "1px solid var(--surface-border)",
+                  }}
+                >
+                  <ExportMenuItem onClick={handleExportCSV} label="CSV" desc="Spreadsheet-compatible" />
+                  <ExportMenuItem onClick={handleExportXLSX} label="Excel (.xlsx)" desc="Formatted workbook" />
+                  <ExportMenuItem onClick={handleExportPDF} label="PDF" desc="Print-ready snapshot" />
+                </div>
+              )}
+            </div>
           )}
           {onPin && !isPinned && (
             <WidgetBtn onClick={onPin} title="Pin to dashboard">+</WidgetBtn>
@@ -68,7 +112,38 @@ export function WidgetCard({ widget, children, onPin, onRemove, isPinned }: Widg
       <div style={{ flex: 1, minHeight: 0, padding: "0 20px 20px" }}>
         {children}
       </div>
+
+      {/* Click-away overlay for export menu */}
+      {showExport && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 40 }}
+          onClick={() => setShowExport(false)}
+        />
+      )}
     </div>
+  );
+}
+
+function ExportMenuItem({ onClick, label, desc }: { onClick: () => void; label: string; desc: string }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "block",
+        width: "100%",
+        padding: "8px 14px",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        textAlign: "left",
+        transition: "background 100ms ease",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-light, #f0f0ff)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+    >
+      <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-primary)" }}>{label}</div>
+      <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", marginTop: 1 }}>{desc}</div>
+    </button>
   );
 }
 
