@@ -11,7 +11,7 @@ export default function Home() {
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "var(--app-bg)" }}>
       {chatOpen && (
-        <div style={{ width: 440, flexShrink: 0, display: "flex", flexDirection: "column", height: "100%" }}>
+        <div style={{ width: 660, flexShrink: 0, display: "flex", flexDirection: "column", height: "100%" }}>
           <ChatPanel />
         </div>
       )}
