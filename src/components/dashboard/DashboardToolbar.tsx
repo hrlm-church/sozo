@@ -41,7 +41,7 @@ export function DashboardToolbar() {
         gap: 14,
         padding: "12px 24px",
         borderBottom: "1px solid var(--surface-border)",
-        background: "#fff",
+        background: "var(--surface)",
         flexShrink: 0,
       }}
     >

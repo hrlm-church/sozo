@@ -11,6 +11,43 @@ import { useDashboardStore } from "@/lib/stores/dashboard-store";
 import { useConversationStore } from "@/lib/stores/conversation-store";
 import type { Widget } from "@/types/widget";
 
+const LOADING_PHRASES = [
+  "Consulting the ancient scrolls...",
+  "Crunching numbers like a prosperity gospel...",
+  "Asking the database nicely...",
+  "Praying over these queries...",
+  "Turning data into disciples...",
+  "Cross-referencing the flock...",
+  "Herding data sheep...",
+  "Mining for ministry gold...",
+  "Summoning the data angels...",
+  "Decoding the donor DNA...",
+  "Parting the sea of spreadsheets...",
+  "Tithing the CPU cycles...",
+  "Walking on data lakes...",
+  "Multiplying loaves and rows...",
+  "Building an ark for these records...",
+  "Seeking wisdom in the data wilderness...",
+  "Casting a net over the database...",
+  "Running the numbers through the Jordan...",
+  "Polishing the golden insights...",
+  "Counting blessings (and donations)...",
+  "Translating donor tongues...",
+  "Sifting grain from chaff...",
+  "Rolling away the stone on these stats...",
+  "Tuning the praise band of analytics...",
+  "Anointing the algorithms...",
+  "Loading manna from heaven...",
+  "Searching for the promised data...",
+  "Baptizing fresh records...",
+  "Reading between the data lines...",
+  "Preparing a table of insights...",
+];
+
+function getRandomPhrase(): string {
+  return LOADING_PHRASES[Math.floor(Math.random() * LOADING_PHRASES.length)];
+}
+
 export function ChatPanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const addWidget = useDashboardStore((s) => s.addWidget);
@@ -19,6 +56,7 @@ export function ChatPanel() {
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [feedbackMap, setFeedbackMap] = useState<Record<string, number>>({});
+  const [loadingPhrase, setLoadingPhrase] = useState(getRandomPhrase);
 
   const conversationId = useConversationStore((s) => s.conversationId);
   const setConversationId = useConversationStore((s) => s.setConversationId);
@@ -122,6 +160,14 @@ export function ChatPanel() {
     }
   }, [messages]);
 
+  // Rotate loading phrase every 3 seconds
+  useEffect(() => {
+    if (!isLoading) return;
+    setLoadingPhrase(getRandomPhrase());
+    const interval = setInterval(() => setLoadingPhrase(getRandomPhrase()), 3000);
+    return () => clearInterval(interval);
+  }, [isLoading]);
+
   function getWidgets(message: UIMessage): Widget[] {
     const result: Widget[] = [];
     if (!message.parts) return result;
@@ -156,13 +202,13 @@ export function ChatPanel() {
         const name = getToolName(part);
         const p = part as Record<string, unknown>;
         if (name === "query_data" && p.state !== "output-available") {
-          active.push("Querying database...");
+          active.push("Interrogating the database...");
         } else if (name === "build_360" && p.state !== "output-available") {
-          active.push("Building 360 profiles...");
+          active.push("Assembling the full picture...");
         } else if (name === "search_data" && p.state !== "output-available") {
-          active.push("Searching profiles...");
+          active.push("Searching the congregation...");
         } else if (name === "show_widget" && p.state !== "output-available") {
-          active.push("Building visualization...");
+          active.push("Crafting a beautiful chart...");
         }
       }
     }
@@ -207,7 +253,7 @@ export function ChatPanel() {
           flexDirection: "column",
           height: "100%",
           flex: 1,
-          background: "#fff",
+          background: "var(--surface)",
           borderRight: "1px solid var(--surface-border)",
           minWidth: 0,
         }}
@@ -290,7 +336,9 @@ export function ChatPanel() {
                                 borderBottomRightRadius: 6,
                               }
                             : {
-                                background: "#f0f0f2",
+                                background: "rgba(255, 255, 255, 0.04)",
+                                backdropFilter: "blur(12px)",
+                                border: "1px solid rgba(255, 255, 255, 0.06)",
                                 color: "var(--text-primary)",
                                 marginRight: 24,
                                 borderBottomLeftRadius: 6,
@@ -429,16 +477,28 @@ export function ChatPanel() {
                       style={{
                         padding: "10px 16px",
                         borderRadius: 18,
-                        background: "#f0f0f2",
+                        background: "rgba(255, 255, 255, 0.04)",
+                        backdropFilter: "blur(12px)",
+                        border: "1px solid rgba(255, 255, 255, 0.06)",
                         color: "var(--text-muted)",
                         fontSize: "0.84rem",
                         marginRight: 24,
                         borderBottomLeftRadius: 6,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
                       }}
                     >
-                      {toolActivity.length > 0
-                        ? toolActivity[toolActivity.length - 1]
-                        : "Thinking..."}
+                      <span style={{ display: "flex", gap: 2 }}>
+                        <span className="typing-dot" />
+                        <span className="typing-dot" />
+                        <span className="typing-dot" />
+                      </span>
+                      <span className="loading-pulse">
+                        {toolActivity.length > 0
+                          ? toolActivity[toolActivity.length - 1]
+                          : loadingPhrase}
+                      </span>
                     </div>
                   );
                 })()}
@@ -480,7 +540,7 @@ export function ChatPanel() {
               padding: "10px 16px",
               borderRadius: "var(--r-pill)",
               border: "1px solid var(--surface-border-strong)",
-              background: "var(--app-bg)",
+              background: "var(--surface-elevated)",
               fontSize: "0.84rem",
               outline: "none",
               color: "var(--text-primary)",

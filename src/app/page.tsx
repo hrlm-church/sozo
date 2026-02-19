@@ -22,7 +22,7 @@ export default function Home() {
             onClick={() => setChatOpen(!chatOpen)}
             title={chatOpen ? "Hide chat" : "Show chat"}
             style={{
-              background: "#fff",
+              background: "var(--surface)",
               border: "none",
               borderBottom: "1px solid var(--surface-border)",
               borderRight: "1px solid var(--surface-border)",

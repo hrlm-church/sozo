@@ -36,7 +36,7 @@ export function ConversationSidebar() {
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        background: "#f8f9fa",
+        background: "var(--app-bg)",
         borderRight: "1px solid var(--surface-border)",
         width: 220,
         flexShrink: 0,
@@ -106,15 +106,15 @@ export function ConversationSidebar() {
                 marginBottom: 2,
                 borderRadius: 6,
                 cursor: "pointer",
-                background: isActive ? "#e8f0fe" : "transparent",
+                background: isActive ? "rgba(6, 147, 227, 0.12)" : "transparent",
                 border: isActive
-                  ? "1px solid #c4d8f5"
+                  ? "1px solid rgba(6, 147, 227, 0.25)"
                   : "1px solid transparent",
                 transition: "all 100ms ease",
               }}
               onMouseEnter={(e) => {
                 if (!isActive)
-                  e.currentTarget.style.background = "#f0f0f2";
+                  e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)";
               }}
               onMouseLeave={(e) => {
                 if (!isActive)

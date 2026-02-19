@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
+import Google from "next-auth/providers/google";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -12,6 +13,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       // Use state check instead of PKCE to avoid "pkceCodeVerifier could not be parsed" errors
       checks: ["state"],
+    }),
+    Google({
+      clientId: process.env.AUTH_GOOGLE_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET,
     }),
   ],
   pages: {
