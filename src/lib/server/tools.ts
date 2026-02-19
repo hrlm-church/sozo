@@ -3,6 +3,7 @@ import { z } from "zod";
 import { guardSql, QUERY_TIMEOUT_MS } from "@/lib/server/sql-guard";
 import { executeSql } from "@/lib/server/sql-client";
 import { hybridSearch } from "@/lib/server/search-client";
+import { buildComprehensive360 } from "@/lib/server/build-360";
 import type { Widget, WidgetType, WidgetConfig } from "@/types/widget";
 
 /**
@@ -106,6 +107,52 @@ export function getChatTools() {
             has_subscription: r.has_subscription,
             profile_summary: r.content.slice(0, 800),
           })),
+        };
+      },
+    }),
+
+    build_360: tool({
+      description:
+        "Build comprehensive 360 profiles for specified persons. " +
+        "Automatically gathers ALL data from ALL serving views: contact info, giving history, " +
+        "orders, events, subscriptions, tags, wealth screening, and engagement. " +
+        "Use this whenever the user asks for a 'full 360 view', 'complete profile', " +
+        "'everything about', or any comprehensive person/donor report. " +
+        "Returns enriched data automatically available to show_widget. " +
+        "ALWAYS use this instead of query_data when the user wants comprehensive profiles.",
+      inputSchema: z.object({
+        filter: z
+          .string()
+          .describe(
+            "SQL WHERE clause to filter persons from person_360 " +
+            "(e.g., \"lifetime_giving > 0\", \"lifecycle_stage = 'active'\", " +
+            "\"display_name LIKE '%Smith%'\")",
+          ),
+        order_by: z
+          .string()
+          .default("lifetime_giving DESC")
+          .describe("SQL ORDER BY clause (e.g., 'lifetime_giving DESC', 'donation_count DESC')"),
+        limit: z
+          .number()
+          .default(20)
+          .describe("Number of persons to profile (1-50)"),
+      }),
+      execute: async ({ filter, order_by, limit }) => {
+        const result = await buildComprehensive360(
+          filter,
+          order_by,
+          Math.min(limit, 50),
+        );
+        if (!result.ok) {
+          return { ok: false as const, error: result.error, data: [] as Record<string, unknown>[] };
+        }
+        // Store for show_widget to use
+        lastQueryRows = result.data;
+        lastQuerySql = `[360 Profile: ${filter} | ORDER BY ${order_by} | LIMIT ${limit}]`;
+        return {
+          ok: true as const,
+          rowCount: result.count,
+          data: result.data,
         };
       },
     }),
