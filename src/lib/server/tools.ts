@@ -15,7 +15,7 @@ import type { Widget, WidgetType, WidgetConfig } from "@/types/widget";
  * the LLM to re-emit every row as tool-call arguments (saves tokens,
  * avoids truncation on large result sets).
  */
-export function getChatTools() {
+export function getChatTools(ownerEmail?: string) {
   // Shared state: last successful query result, keyed by sql string
   let lastQueryRows: Record<string, unknown>[] = [];
   let lastQuerySql: string | undefined;
@@ -245,14 +245,15 @@ export function getChatTools() {
         "Examples: 'Top 5 donors account for 23% of all giving', " +
         "'December giving is 4x higher than average — critical for year-end campaigns', " +
         "'383 recurring donors were lost in platform migration — $205K/year impact'. " +
-        "Saved insights persist across conversations and inform future analysis. " +
-        "Only save genuinely notable findings — not routine query results.",
+        "Also use category 'user_interest' to remember what this user cares about — " +
+        "e.g. 'User focuses on major donor retention', 'User tracks subscription churn closely'. " +
+        "Saved insights persist across conversations and inform future analysis.",
       inputSchema: z.object({
         text: z
           .string()
           .describe("The insight text — a concise, actionable finding (1-2 sentences max)"),
         category: z
-          .enum(["giving", "commerce", "events", "subscriptions", "engagement", "wealth", "risk", "opportunity", "general"])
+          .enum(["giving", "commerce", "events", "subscriptions", "engagement", "wealth", "risk", "opportunity", "general", "user_interest"])
           .describe("Category for the insight"),
         confidence: z
           .number()
@@ -266,7 +267,7 @@ export function getChatTools() {
           .describe("The SQL query or search that produced this insight"),
       }),
       execute: async ({ text, category, confidence, source_query }) => {
-        const result = await saveInsight(text, category, confidence, source_query);
+        const result = await saveInsight(text, category, confidence, source_query, ownerEmail);
         return result;
       },
     }),

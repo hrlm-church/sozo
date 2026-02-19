@@ -55,6 +55,7 @@ export function ChatPanel() {
   const [input, setInput] = useState("");
   const [feedbackMap, setFeedbackMap] = useState<Record<string, number>>({});
   const [loadingPhrase, setLoadingPhrase] = useState(getRandomPhrase);
+  const [greetingSent, setGreetingSent] = useState(false);
 
   const conversationId = useConversationStore((s) => s.conversationId);
   const setConversationId = useConversationStore((s) => s.setConversationId);
@@ -72,12 +73,27 @@ export function ChatPanel() {
     if (conversationId && conversationId !== activeConvId) {
       loadConversation(conversationId);
     } else if (conversationId === null && activeConvId !== null) {
-      // New chat
+      // New chat — reset greeting so it fires again
       setMessages([]);
       setActiveConvId(null);
+      setGreetingSent(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
+
+  // Auto-greeting: send [GREETING] when a new empty chat loads
+  useEffect(() => {
+    if (
+      !greetingSent &&
+      messages.length === 0 &&
+      !conversationId &&
+      !isLoading
+    ) {
+      setGreetingSent(true);
+      sendMessage({ text: "[GREETING]" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [greetingSent, messages.length, conversationId, isLoading]);
 
   const loadConversation = async (id: string) => {
     try {
@@ -110,8 +126,10 @@ export function ChatPanel() {
         setConversationId(convId);
       }
 
-      // Extract title from first user message
-      const firstUser = msgs.find((m) => m.role === "user");
+      // Extract title from first real user message (skip [GREETING])
+      const firstUser = msgs.find(
+        (m) => m.role === "user" && getTextContent(m) !== "[GREETING]",
+      );
       const title = firstUser
         ? getTextContent(firstUser).slice(0, 100) || "New Chat"
         : "New Chat";
@@ -283,11 +301,11 @@ export function ChatPanel() {
 
       {/* Messages area */}
       <div ref={scrollRef} style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
-        {messages.length === 0 ? (
+        {messages.length === 0 && !isLoading ? (
           <SuggestedPrompts onSelect={handleSuggestedPrompt} />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {messages.map((message) => {
+            {messages.filter((m) => !(m.role === "user" && getTextContent(m) === "[GREETING]")).map((message) => {
               const text = getTextContent(message);
               const msgWidgets = getWidgets(message);
               return (
