@@ -4,7 +4,7 @@ import { guardSql, QUERY_TIMEOUT_MS } from "@/lib/server/sql-guard";
 import { executeSql } from "@/lib/server/sql-client";
 import { hybridSearch } from "@/lib/server/search-client";
 import { buildComprehensive360 } from "@/lib/server/build-360";
-import { saveInsight, getRecentInsights } from "@/lib/server/insights";
+import { saveInsight, saveUserMemory } from "@/lib/server/insights";
 import type { Widget, WidgetType, WidgetConfig } from "@/types/widget";
 
 /**
@@ -240,20 +240,15 @@ export function getChatTools(ownerEmail?: string) {
 
     save_insight: tool({
       description:
-        "Save something to your long-term memory. This is how you learn and get smarter across conversations. " +
-        "USE THIS AFTER EVERY MEANINGFUL EXCHANGE. Categories: " +
-        "- Data findings (giving/commerce/events/etc): 'Top 5 donors = 23% of giving', 'December = 25% of annual giving' " +
-        "- 'user_interest': What this user cares about — 'User focuses on donor retention', 'User tracks subscription churn' " +
-        "- 'correction': When the user corrects you — 'Keap subscriptions are stale, only use Subbly', 'Do not show person_id' " +
-        "- 'learning': General lessons — 'Donor Direct data requires account number joins', 'Tours are #1 acquisition channel' " +
-        "- 'risk'/'opportunity': Strategic flags — '383 lost recurring donors = $205K/year', 'Ultra High donors giving way below capacity' " +
-        "Corrections and learnings NEVER expire. Save generously — you read these at the start of every future conversation.",
+        "Save a specific data finding from your analysis. " +
+        "Use when a query reveals something notable — a trend, risk, anomaly, or opportunity. " +
+        "These expire after 30 days. For permanent knowledge (corrections, user preferences, learnings), use update_memory instead.",
       inputSchema: z.object({
         text: z
           .string()
           .describe("The insight text — a concise, actionable finding (1-2 sentences max)"),
         category: z
-          .enum(["giving", "commerce", "events", "subscriptions", "engagement", "wealth", "risk", "opportunity", "general", "user_interest", "correction", "learning"])
+          .enum(["giving", "commerce", "events", "subscriptions", "engagement", "wealth", "risk", "opportunity", "general"])
           .describe("Category for the insight"),
         confidence: z
           .number()
@@ -268,6 +263,32 @@ export function getChatTools(ownerEmail?: string) {
       }),
       execute: async ({ text, category, confidence, source_query }) => {
         const result = await saveInsight(text, category, confidence, source_query, ownerEmail);
+        return result;
+      },
+    }),
+
+    update_memory: tool({
+      description:
+        "Update your persistent memory document for this user. This is your long-term brain — " +
+        "it gets loaded at the start of every future conversation. " +
+        "Pass the COMPLETE updated document (it replaces the previous version). " +
+        "Use this to remember: corrections the user made, what this user cares about, " +
+        "data patterns you've learned, preferences, and anything worth knowing permanently. " +
+        "Keep it organized, concise (under 2000 chars), and curated — remove outdated info, merge duplicates. " +
+        "Call this after every meaningful exchange where you learned something new.",
+      inputSchema: z.object({
+        memory: z
+          .string()
+          .max(4000)
+          .describe(
+            "The full memory document in markdown. Organized by sections like: " +
+            "## Corrections, ## User Preferences, ## Data Patterns, ## Topics Explored. " +
+            "This REPLACES the previous document entirely.",
+          ),
+      }),
+      execute: async ({ memory }) => {
+        if (!ownerEmail) return { ok: false, error: "No user session" };
+        const result = await saveUserMemory(ownerEmail, memory);
         return result;
       },
     }),

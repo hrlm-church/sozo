@@ -4,7 +4,9 @@ function esc(val: string): string {
   return val.replace(/'/g, "''");
 }
 
-/** Save an insight to the database — per-user ownership */
+// ── Data Insights (ephemeral, 30-day TTL) ──────────────────────────
+
+/** Save an analytical finding to the database */
 export async function saveInsight(
   text: string,
   category: string,
@@ -14,38 +16,8 @@ export async function saveInsight(
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
   try {
     const owner = ownerEmail || "system@sozo.local";
-
-    // Persistent categories: dedup by matching first 50 chars, update instead of duplicate
-    const dedupCategories = ["user_interest", "correction", "learning"];
-    if (dedupCategories.includes(category)) {
-      const prefix = text.slice(0, 50);
-      const existing = await executeSql(`
-        SELECT TOP (1) id FROM sozo.insight
-        WHERE owner_email = N'${esc(owner)}'
-          AND category = N'${esc(category)}'
-          AND LEFT(insight_text, 50) = N'${esc(prefix)}'
-      `);
-      if (existing.ok && existing.rows.length > 0) {
-        const existingId = existing.rows[0].id as string;
-        await executeSql(`
-          UPDATE sozo.insight
-          SET insight_text = N'${esc(text.slice(0, 1000))}',
-              confidence = ${Math.min(Math.max(confidence, 0), 1)},
-              source_query = ${sourceQuery ? `N'${esc(sourceQuery.slice(0, 4000))}'` : "NULL"},
-              created_at = SYSUTCDATETIME()
-          WHERE id = '${esc(existingId)}'
-        `);
-        return { ok: true, id: existingId };
-      }
-    }
-
     const id = crypto.randomUUID();
     const conf = Math.min(Math.max(confidence, 0), 1);
-    // Persistent categories never expire — they represent learned knowledge
-    const persistentCategories = ["user_interest", "correction", "learning"];
-    const expiresAt = persistentCategories.includes(category)
-      ? "NULL"
-      : "DATEADD(day, 30, SYSUTCDATETIME())";
 
     await executeSql(`
       INSERT INTO sozo.insight (id, insight_text, category, confidence, source_query, owner_email, expires_at)
@@ -56,7 +28,7 @@ export async function saveInsight(
         ${conf},
         ${sourceQuery ? `N'${esc(sourceQuery.slice(0, 4000))}'` : "NULL"},
         N'${esc(owner)}',
-        ${expiresAt}
+        DATEADD(day, 30, SYSUTCDATETIME())
       )
     `);
     return { ok: true, id };
@@ -65,7 +37,7 @@ export async function saveInsight(
   }
 }
 
-/** Get recent non-expired insights for the system prompt — filtered per-user */
+/** Get recent non-expired insights for the system prompt */
 export async function getRecentInsights(limit: number = 20, ownerEmail?: string): Promise<string> {
   try {
     const ownerFilter = ownerEmail
@@ -92,39 +64,64 @@ export async function getRecentInsights(limit: number = 20, ownerEmail?: string)
   }
 }
 
-/** Get user context from saved persistent memories — injected into system prompt */
-export async function getUserContext(ownerEmail: string): Promise<string> {
+// ── User Memory (persistent, curated document per user) ────────────
+
+let memoryTableReady = false;
+
+/** Ensure sozo.user_memory table exists */
+async function ensureMemoryTable(): Promise<void> {
+  if (memoryTableReady) return;
   try {
+    await executeSql(`
+      IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'user_memory' AND schema_id = SCHEMA_ID('sozo'))
+      CREATE TABLE sozo.user_memory (
+        owner_email NVARCHAR(255) NOT NULL PRIMARY KEY,
+        memory_text NVARCHAR(MAX) NOT NULL DEFAULT N'',
+        updated_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+      )
+    `);
+    memoryTableReady = true;
+  } catch {
+    // Table likely already exists
+    memoryTableReady = true;
+  }
+}
+
+/** Get the user's curated memory document */
+export async function getUserMemory(ownerEmail: string): Promise<string> {
+  try {
+    await ensureMemoryTable();
     const result = await executeSql(`
-      SELECT TOP (30) insight_text, category, FORMAT(created_at, 'MMM d') AS saved_on
-      FROM sozo.insight
+      SELECT memory_text FROM sozo.user_memory
       WHERE owner_email = N'${esc(ownerEmail)}'
-        AND category IN (N'user_interest', N'correction', N'learning')
-        AND (expires_at IS NULL OR expires_at > SYSUTCDATETIME())
-      ORDER BY created_at DESC
     `);
     if (!result.ok || result.rows.length === 0) return "";
-
-    const sections: Record<string, string[]> = {};
-    for (const r of result.rows) {
-      const cat = r.category as string;
-      const text = r.insight_text as string;
-      if (!sections[cat]) sections[cat] = [];
-      sections[cat].push(`- ${text}`);
-    }
-
-    const parts: string[] = [];
-    if (sections.correction?.length) {
-      parts.push(`**Corrections (things you got wrong before — don't repeat):**\n${sections.correction.join("\n")}`);
-    }
-    if (sections.user_interest?.length) {
-      parts.push(`**What this user cares about:**\n${sections.user_interest.join("\n")}`);
-    }
-    if (sections.learning?.length) {
-      parts.push(`**Learned from past conversations:**\n${sections.learning.join("\n")}`);
-    }
-    return parts.join("\n\n");
+    return (result.rows[0].memory_text as string) || "";
   } catch {
     return "";
+  }
+}
+
+/** Save/update the user's curated memory document (upsert) */
+export async function saveUserMemory(
+  ownerEmail: string,
+  memoryText: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await ensureMemoryTable();
+    const trimmed = memoryText.slice(0, 4000); // Cap at 4000 chars
+    await executeSql(`
+      MERGE sozo.user_memory AS t
+      USING (SELECT N'${esc(ownerEmail)}' AS owner_email) AS s
+      ON t.owner_email = s.owner_email
+      WHEN MATCHED THEN
+        UPDATE SET memory_text = N'${esc(trimmed)}', updated_at = SYSUTCDATETIME()
+      WHEN NOT MATCHED THEN
+        INSERT (owner_email, memory_text, updated_at)
+        VALUES (N'${esc(ownerEmail)}', N'${esc(trimmed)}', SYSUTCDATETIME());
+    `);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Failed to save memory" };
   }
 }
