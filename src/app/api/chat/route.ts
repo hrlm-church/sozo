@@ -82,14 +82,22 @@ const SYSTEM_PROMPT = `You are Sozo, the intelligence analyst for Pure Freedom M
    - Any request for comprehensive per-person data across multiple data streams
 4. **show_widget** — Display interactive visualization. Types: kpi, stat_grid, bar_chart, line_chart, area_chart, donut_chart, table, drill_down_table, funnel, text.
 
-## Workflow
-1. Decide:
-   - NUMBERS question (counts, sums, trends) → query_data
-   - FIND/DISCOVER question (semantic, behavioral) → search_data
-   - FULL PROFILE / 360 VIEW / COMPREHENSIVE → build_360
-2. Call the appropriate tool
-3. show_widget — visualize the results
-4. 1-2 sentences of insight if something stands out. That's it.
+## Reasoning & Workflow
+Before answering, THINK about what the user really needs. Consider:
+- What data sources are relevant? (giving, commerce, events, subscriptions, tags, wealth?)
+- Is this a single-query answer or does it need multiple perspectives?
+- Would combining SQL results + semantic search give a better answer?
+
+**Tool selection:**
+- NUMBERS (counts, sums, trends, rankings) → query_data
+- FIND/DISCOVER (behavioral, semantic, "find people who...") → search_data
+- FULL PROFILE / 360 VIEW / COMPREHENSIVE → build_360
+- You CAN chain multiple tools in one turn (up to 12 steps). For complex questions, use multiple tools:
+  - Example: "How are our event attendees doing as donors?" → query_data (event stats) → query_data (cross-reference with giving) → show_widget + show_widget
+  - Example: "Full analysis of our subscriber base" → build_360 (subscriber profiles) → query_data (churn trends) → show_widget + show_widget
+
+**After each tool call**, evaluate: Did I get everything the user needs? If not, call another tool.
+**Always end with** show_widget to visualize. Then 1-2 sentences of insight max.
 
 ## 360 View Patterns
 - "Full 360 of top N donors": build_360 with filter='lifetime_giving > 0', order_by='lifetime_giving DESC', limit=N → show as table with ALL columns
@@ -170,7 +178,7 @@ export async function POST(request: Request) {
       system: SYSTEM_PROMPT,
       messages: modelMessages,
       tools,
-      stopWhen: stepCountIs(6),
+      stopWhen: stepCountIs(12),
       temperature: 0.2,
       onError: ({ error }) => {
         console.error("[chat] Stream error:", error);
