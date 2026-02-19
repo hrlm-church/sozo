@@ -47,7 +47,9 @@ export function ChatPanel() {
     return message.parts
       .filter((p) => p.type === "text")
       .map((p) => (p as { type: "text"; text: string }).text)
-      .join("");
+      .join("")
+      .replace(/\{\{widget:id=[^}]+\}\}\s*/g, "")
+      .trim();
   }
 
   /** Get in-progress tool call info for streaming indicator */
@@ -138,15 +140,40 @@ export function ChatPanel() {
                       {text}
                     </div>
                   )}
-                  {msgWidgets.map((widget) => (
-                    <div key={widget.id} style={{ marginTop: 10, height: 280 }}>
-                      <WidgetRenderer
-                        widget={widget}
-                        onPin={() => addWidget(widget)}
-                        isPinned={pinnedIds.has(widget.id)}
-                      />
-                    </div>
-                  ))}
+                  {msgWidgets.map((widget) => {
+                    const tall = widget.type === "stat_grid" || widget.type === "table" || widget.type === "drill_down_table";
+                    return (
+                      <div key={widget.id} style={{ marginTop: 10, minHeight: tall ? 360 : 280 }}>
+                        <WidgetRenderer
+                          widget={widget}
+                          onPin={() => addWidget(widget)}
+                          isPinned={pinnedIds.has(widget.id)}
+                        />
+                        {!pinnedIds.has(widget.id) && (
+                          <button
+                            onClick={() => addWidget(widget)}
+                            style={{
+                              display: "block",
+                              margin: "6px auto 0",
+                              padding: "5px 16px",
+                              fontSize: "0.72rem",
+                              fontWeight: 600,
+                              color: "var(--accent)",
+                              background: "var(--accent-light)",
+                              border: "1px solid var(--accent)",
+                              borderRadius: "var(--r-pill)",
+                              cursor: "pointer",
+                              transition: "all 120ms ease",
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent)"; e.currentTarget.style.color = "#fff"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent-light)"; e.currentTarget.style.color = "var(--accent)"; }}
+                          >
+                            + Pin to Dashboard
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
