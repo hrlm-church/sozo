@@ -153,7 +153,6 @@ export async function POST(request: Request) {
     const tools = getChatTools(ownerEmail);
     const modelMessages = await convertToModelMessages(uiMessages);
     const models = getModelChain();
-    const model = models[0];
 
     // Build system prompt with per-user context
     let systemPrompt = SYSTEM_PROMPT;
@@ -178,24 +177,38 @@ export async function POST(request: Request) {
       // Non-critical
     }
 
-    console.log("[chat] Using model, messages:", modelMessages.length, "user:", ownerEmail);
+    // Try each model in order — fallback on rate limit or provider errors
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
+      try {
+        console.log("[chat] Trying model", i, "messages:", modelMessages.length, "user:", ownerEmail);
 
-    const result = streamText({
-      model,
-      system: systemPrompt,
-      messages: modelMessages,
-      tools,
-      stopWhen: stepCountIs(12),
-      temperature: 0.4,
-      onError: ({ error }) => {
-        console.error("[chat] Stream error:", error);
-      },
-      onFinish: ({ text, finishReason, usage }) => {
-        console.log("[chat] Finished:", { finishReason, usage, textLen: text?.length });
-      },
-    });
+        const result = streamText({
+          model,
+          system: systemPrompt,
+          messages: modelMessages,
+          tools,
+          stopWhen: stepCountIs(12),
+          temperature: 0.4,
+          onError: ({ error }) => {
+            console.error("[chat] Stream error on model", i, ":", error);
+          },
+          onFinish: ({ text, finishReason, usage }) => {
+            console.log("[chat] Finished model", i, ":", { finishReason, usage, textLen: text?.length });
+          },
+        });
 
-    return result.toUIMessageStreamResponse();
+        return result.toUIMessageStreamResponse();
+      } catch (modelError) {
+        const msg = modelError instanceof Error ? modelError.message : String(modelError);
+        console.warn(`[chat] Model ${i} failed: ${msg}`);
+        if (i === models.length - 1) throw modelError; // Last model — rethrow
+        // Otherwise try next model
+      }
+    }
+
+    // Should never reach here, but just in case
+    throw new Error("No AI model available");
   } catch (error) {
     console.error("[chat] Route error:", error);
     return new Response(

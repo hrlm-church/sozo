@@ -56,18 +56,18 @@ function extractResourceName(endpoint: string): string {
 export function getModelChain(): LanguageModel[] {
   const models: LanguageModel[] = [];
 
-  // 1. OpenAI (reliable, no rate limit issues)
-  const openai = getOpenAIProvider();
-  if (openai) {
-    const model = process.env.OPENAI_MODEL ?? "gpt-5.2";
-    models.push(openai(model));
-  }
-
-  // 2. Anthropic Claude (fallback — swap to primary once rate limit tier is upgraded)
+  // 1. Anthropic Claude (primary — best tool use, high rate limits)
   const anthropic = getAnthropicProvider();
   if (anthropic) {
     const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5-20250929";
     models.push(anthropic(model));
+  }
+
+  // 2. OpenAI (fallback — 500K TPM limit can be hit on large queries)
+  const openai = getOpenAIProvider();
+  if (openai) {
+    const model = process.env.OPENAI_MODEL ?? "gpt-5.2";
+    models.push(openai(model));
   }
 
   // 3. Azure OpenAI
