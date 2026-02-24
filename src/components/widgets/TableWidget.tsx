@@ -49,7 +49,7 @@ export function TableWidget({ widget }: { widget: Widget }) {
       const isCount = COUNT_HINTS.test(col);
       const looksMonetary = !isCount && CURRENCY_HINTS.test(col);
       if (looksMonetary || (config.numberFormat === "currency" && !isCount)) {
-        return "$" + val.toLocaleString(undefined, { minimumFractionDigits: 2 });
+        return "$" + val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       }
       if (config.numberFormat === "percent") return val.toFixed(1) + "%";
       // Count-like integers: no decimals
@@ -60,20 +60,23 @@ export function TableWidget({ widget }: { widget: Widget }) {
     return String(val);
   };
 
+  const isWide = columns.length >= 6;
+
   return (
-    <div style={{ overflow: "auto", maxHeight: "100%", fontSize: "0.8rem" }}>
+    <div style={{ overflow: "auto", maxHeight: "100%", fontSize: isWide ? "0.76rem" : "0.8rem" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            {columns.map((col) => (
+            {columns.map((col, ci) => (
               <th
                 key={col}
                 style={{
                   position: "sticky",
                   top: 0,
+                  ...(ci === 0 ? { left: 0, zIndex: 2 } : {}),
                   background: "var(--surface-strong)",
                   borderBottom: "2px solid var(--surface-border)",
-                  padding: "8px 10px",
+                  padding: isWide ? "6px 8px" : "8px 10px",
                   textAlign: "left",
                   fontWeight: 600,
                   color: "var(--text-muted)",
@@ -94,13 +97,20 @@ export function TableWidget({ widget }: { widget: Widget }) {
                 background: i % 2 === 0 ? "transparent" : "var(--surface)",
               }}
             >
-              {columns.map((col) => (
+              {columns.map((col, ci) => (
                 <td
                   key={col}
                   style={{
-                    padding: "6px 10px",
+                    padding: isWide ? "5px 8px" : "6px 10px",
                     whiteSpace: "nowrap",
                     color: "var(--text-primary)",
+                    ...(ci === 0 ? {
+                      position: "sticky" as const,
+                      left: 0,
+                      background: i % 2 === 0 ? "var(--surface-elevated, #fff)" : "var(--surface)",
+                      zIndex: 1,
+                      fontWeight: 500,
+                    } : {}),
                   }}
                 >
                   {formatCell(row[col], col)}

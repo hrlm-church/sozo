@@ -101,11 +101,17 @@ const VIEWS = [
       GROUP BY person_id
     ) g ON g.master_id = im.master_id
     LEFT JOIN (
-      SELECT im2.master_id, COUNT(DISTINCT o.keap_id) AS order_count,
+      SELECT im2.master_id, COUNT(DISTINCT oi.order_keap_id) AS order_count,
         SUM(oi.price_per_unit * oi.qty) AS total_spent
-      FROM silver.[order] o
-      JOIN silver.order_item oi ON oi.order_keap_id = o.keap_id
+      FROM silver.order_item oi
+      JOIN silver.[order] o ON o.keap_id = oi.order_keap_id
       JOIN silver.identity_map im2 ON im2.source_system = 'keap' AND im2.source_id = CAST(o.contact_keap_id AS VARCHAR)
+      LEFT JOIN silver.product_classification pc
+        ON pc.product_keap_id = oi.product_keap_id AND oi.product_keap_id > 0
+      LEFT JOIN silver.product_classification pcn
+        ON pcn.item_name_pattern = oi.item_name AND pcn.product_keap_id IS NULL
+        AND (oi.product_keap_id IS NULL OR oi.product_keap_id = 0)
+      WHERE COALESCE(pc.revenue_category, pcn.revenue_category, 'commerce') = 'commerce'
       GROUP BY im2.master_id
     ) o ON o.master_id = im.master_id
     LEFT JOIN (
@@ -330,8 +336,15 @@ const VIEWS = [
     JOIN silver.identity_map im ON im.source_system = 'keap' AND im.source_id = CAST(o.contact_keap_id AS VARCHAR)
     LEFT JOIN silver.contact c ON c.contact_id = im.contact_id
     LEFT JOIN (
-      SELECT order_keap_id, SUM(price_per_unit * qty) AS total_amount
-      FROM silver.order_item GROUP BY order_keap_id
+      SELECT oi.order_keap_id, SUM(oi.price_per_unit * oi.qty) AS total_amount
+      FROM silver.order_item oi
+      LEFT JOIN silver.product_classification pc
+        ON pc.product_keap_id = oi.product_keap_id AND oi.product_keap_id > 0
+      LEFT JOIN silver.product_classification pcn
+        ON pcn.item_name_pattern = oi.item_name AND pcn.product_keap_id IS NULL
+        AND (oi.product_keap_id IS NULL OR oi.product_keap_id = 0)
+      WHERE COALESCE(pc.revenue_category, pcn.revenue_category, 'commerce') = 'commerce'
+      GROUP BY oi.order_keap_id
     ) oi_total ON oi_total.order_keap_id = o.keap_id
     WHERE im.is_primary = 1`
   },

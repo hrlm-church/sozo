@@ -74,12 +74,18 @@ const VIEWS = [
     FROM gold.person p
     LEFT JOIN (
       SELECT im.master_id,
-        COUNT(DISTINCT o.keap_id) AS order_count,
+        COUNT(DISTINCT oi.order_keap_id) AS order_count,
         SUM(oi.price_per_unit * oi.qty) AS total_spent,
         MIN(o.created_at) AS first_order_date, MAX(o.created_at) AS last_order_date
-      FROM silver.[order] o
+      FROM silver.order_item oi
+      JOIN silver.[order] o ON o.keap_id = oi.order_keap_id
       JOIN silver.identity_map im ON im.source_system = 'keap' AND TRY_CAST(im.source_id AS INT) = o.contact_keap_id
-      LEFT JOIN silver.order_item oi ON oi.order_keap_id = o.keap_id
+      LEFT JOIN silver.product_classification pc
+        ON pc.product_keap_id = oi.product_keap_id AND oi.product_keap_id > 0
+      LEFT JOIN silver.product_classification pcn
+        ON pcn.item_name_pattern = oi.item_name AND pcn.product_keap_id IS NULL
+        AND (oi.product_keap_id IS NULL OR oi.product_keap_id = 0)
+      WHERE COALESCE(pc.revenue_category, pcn.revenue_category, 'commerce') = 'commerce'
       GROUP BY im.master_id
     ) o ON o.master_id = p.master_id
     LEFT JOIN (
@@ -160,11 +166,14 @@ const VIEWS = [
     name: 'gold.product_summary',
     sql: `CREATE VIEW gold.product_summary AS
     SELECT p.keap_id AS product_id, p.name AS product_name, p.price AS list_price, p.sku, p.status,
+      ISNULL(pc.revenue_category, 'commerce') AS revenue_category,
+      ISNULL(pc.subcategory, '') AS subcategory,
       ISNULL(s.times_ordered, 0) AS times_ordered,
       ISNULL(s.total_qty, 0) AS total_qty_sold,
       ISNULL(s.total_revenue, 0) AS total_revenue,
       s.first_ordered, s.last_ordered
     FROM silver.product p
+    LEFT JOIN silver.product_classification pc ON pc.product_keap_id = p.keap_id
     LEFT JOIN (
       SELECT oi.product_keap_id,
         COUNT(*) AS times_ordered, SUM(oi.qty) AS total_qty,

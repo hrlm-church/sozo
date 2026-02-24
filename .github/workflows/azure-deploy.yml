@@ -2,7 +2,7 @@ name: Deploy to Azure App Service
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
   build-and-deploy:
@@ -42,8 +42,16 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to Azure App Service
+      - name: Deploy to Production
+        if: github.ref == 'refs/heads/main'
         uses: azure/webapps-deploy@v3
         with:
           app-name: sozo-app
+          package: deploy.zip
+
+      - name: Deploy to Dev
+        if: github.ref == 'refs/heads/dev'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: sozo-app-dev
           package: deploy.zip
