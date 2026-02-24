@@ -1,70 +1,70 @@
 /**
  * Schema context for the LLM system prompt.
- * SERVING VIEWS are pre-joined — the LLM should NEVER need to write JOINs.
+ * The LLM queries serving detail views (identity-resolved) + silver tables for flexibility.
  * KEEP THIS CONCISE — every token counts against rate limits.
  */
 
 export const SCHEMA_CONTEXT = `
-## Serving Views (pre-joined — NO JOINs needed)
-All views have person_id (internal key — NEVER show to users), display_name, email. T-SQL: TOP (N), never LIMIT.
+## Database (Azure SQL, T-SQL — use TOP (N) not LIMIT)
 
-serving.person_360 (120K+) — person_id, display_name, first_name, last_name, email, phone, city, state, postal_code, donation_count, lifetime_giving, avg_gift, largest_gift, first_gift_date, last_gift_date, recency_days, order_count, total_spent, woo_order_count, woo_total_spent, shopify_order_count, shopify_total_spent, ticket_count, subbly_sub_count, subbly_active, stripe_charge_count, stripe_total, tag_count, note_count, comm_count, lifecycle_stage ('prospect','active','cooling','lapsed','lost')
+### Person Demographics (89K unique people, 13 sources)
+silver.contact (212K) — contact_id, source_system, source_id, first_name, last_name, email_primary, phone_primary, city, state, postal_code, date_of_birth, gender, organization_name, lifecycle_stage, created_at
+silver.identity_map (212K) — master_id (unified person key), contact_id, source_system, source_id, is_primary
+To get a person's best info: JOIN silver.identity_map im ON im.is_primary = 1 JOIN silver.contact c ON c.contact_id = im.contact_id
+All serving views below use person_id = master_id from identity_map. person_id is internal — NEVER include in SELECT output.
 
-serving.donor_summary (5K) — person_id, display_name, email, donation_count, total_given, avg_gift, largest_gift, first_gift_date, last_gift_date, days_since_last, fund_count, active_months, lifecycle_stage
-
+### Giving ($6.7M lifetime, 5K donors)
+serving.donor_summary (5K) — person_id, display_name, email, donation_count, total_given, avg_gift, largest_gift, first_gift_date, last_gift_date, days_since_last, fund_count, active_months, lifecycle_stage ('active','cooling','lapsed','lost')
 serving.donor_monthly (62K) — person_id, display_name, donation_month (yyyy-MM), donation_year, gifts, amount, primary_fund
+serving.donation_detail (66K, 2014-2025) — person_id, display_name, amount, donated_at, donation_month, donation_year, payment_method, fund, appeal, source_system
 
-serving.donation_detail (66K, 2014-2025) — donation_id, person_id, display_name, amount, donated_at, donation_month, donation_year, payment_method, fund, appeal, source_system
+### Commerce (Keap order items classified as 'commerce' via silver.product_classification — excludes donations, subscriptions, events, shipping, tax)
+serving.order_detail (205K Keap) — person_id, display_name, total_amount, order_date, order_month, order_status
+serving.woo_order_detail (67K WooCommerce) — person_id, display_name, email, order_number, order_date, order_month, order_year, revenue, net_sales, status, product_name, items_sold, coupon, customer_type, city, state
+silver.shopify_order (5K) — customer_email, total, line_item_name, line_item_price, paid_at, vendor, billing_city, billing_state (JOIN to identity via email)
 
-serving.tag_detail (3M+) — person_id, display_name, tag_value, tag_group, applied_at, source_system ('keap','mailchimp','shopify')
-tag_group: 'Donor Assignment','True Girl','B2BB','Nurture Tags','True Productions','Customer Tags','Box Tracking','Mailchimp Audience','Shopify Customer',NULL
+### Payments
+serving.payment_detail (135K Keap) — person_id, display_name, amount, payment_date, payment_month, payment_method
+serving.stripe_charge_detail (163K) — person_id, display_name, email, amount, amount_refunded, status, description, card_brand, card_last4, created_at, charge_month, charge_year, fee, meta_source, meta_from_app
 
-serving.order_detail (205K) — order_id, person_id, display_name, total_amount, order_date, order_month, order_status
-serving.payment_detail (135K) — payment_id, person_id, display_name, amount, payment_date, payment_month, payment_method
-serving.invoice_detail (205K) — invoice_id, person_id, display_name, invoice_total, invoice_status, issued_at, invoice_month
-serving.subscription_detail (8K+) — person_id, display_name, product_name, amount, cadence, subscription_status ('Active','Inactive'), source_system ('keap','subbly')
-IMPORTANT: Keap subscriptions are STALE (migrated to Subbly). ALWAYS filter: WHERE source_system = 'subbly' — Subbly is the ONLY valid subscription source.
+### Subscriptions
+serving.subscription_detail (8K) — person_id, display_name, product_name, amount, cadence, subscription_status ('Active','Inactive'), source_system ('keap','subbly')
+CRITICAL: Keap subscriptions are STALE. ALWAYS filter WHERE source_system = 'subbly' for active subscriptions.
+silver.subbly_subscription (2.4K) — customer_email, customer_name, product_name, status, renewal_date, date_created, date_cancelled, cancellation_reason, orders_count, girl_name
 
+### Events (21K tickets, 53 events)
 serving.event_detail (21K) — person_id, display_name, event_name, ticket_type, payment_date, event_month, event_year, order_total, ticket_total, price, checked_in, attendee_name, buyer_name, city, state
-USE FOR: "event attendance", "tour data", "ticket sales", "Pajama Party Tour", "Crazy Hair Tour", "pop-up parties"
 
-serving.stripe_charge_detail (163K) — person_id, display_name, email, stripe_charge_id, amount, amount_refunded, status, description, card_brand, card_last4, created_at, charge_month, charge_year, fee, meta_source, meta_from_app, meta_order_id, source_file
-USE FOR: "Stripe payments", "payment processing", "failed charges", "refunds", "payment gateway analysis", "revenue by year"
+### Tags (5.7M assignments)
+serving.tag_detail (5.7M) — person_id, display_name, tag_value, tag_group, applied_at, source_system
+tag_group values: 'Donor Assignment','True Girl','B2BB','Nurture Tags','Customer Tags','Box Tracking','Mailchimp Audience','Shopify Customer'
 
-serving.woo_order_detail (67K) — person_id, display_name, email, order_number, order_date, order_month, order_year, revenue, net_sales, status, product_name, items_sold, coupon, customer_type, attribution, city, state
-USE FOR: "WooCommerce orders", "website purchases", "product sales", "coupon usage", "customer acquisition"
-
-serving.household_360 (55K) — household_id, name, member_count, household_giving_total, giving_trend
+### Engagement
 serving.communication_detail (24K) — person_id, display_name, channel, direction, subject, sent_at
 
-serving.wealth_screening (1.1K) — person_id, keap_id, display_name, email, giving_capacity (dollars), capacity_tier (letter A-L), capacity_min, capacity_max, capacity_label ('Ultra High ($250K+)':29, 'Very High ($100K-$250K)':114, 'High ($25K-$100K)':391, 'Medium ($10K-$25K)':178, 'Standard':397), prospect_rating, quality_score, real_estate_value
-USE FOR: "donor capacity", "wealth screening", "giving below capacity", "major gift prospects"
-JOIN to donor_summary: WHERE w.person_id = d.person_id to compare giving_capacity vs total_given
+### Wealth Screening (1.1K screened contacts)
+serving.wealth_screening (1.1K) — person_id, display_name, email, giving_capacity, capacity_label ('Ultra High ($250K+)':29, 'Very High ($100K-$250K)':114, 'High ($25K-$100K)':391, 'Medium ($10K-$25K)':178, 'Standard':397), quality_score
+JOIN to donor_summary on person_id to compare giving_capacity vs total_given.
 
-serving.lost_recurring_donors (383) — person_id, dd_account_nbr, display_name, monthly_amount, annual_value, frequency, status, going_to_givebutter, category, source_code
-USE FOR: "lost recurring donors", "MRR recovery", "Kindful migration losses". Total lost MRR: $17K/month ($206K/year)
-
-serving.stripe_customer (6.8K) — person_id, stripe_customer_id, email, card_holder_name, display_name, total_spend, payment_count, refunded_volume, dispute_losses, created_date
-USE FOR: "Stripe customers", "unlinked payments", "payment gaps". $2M total spend, 3,292 linked to identity, 1,946 unlinked with $1.27M in spend
+### Special Views
+serving.lost_recurring_donors (383) — person_id, display_name, monthly_amount, annual_value, frequency, status, category. Lost MRR: $17K/month ($206K/year).
+serving.stripe_customer (6.8K) — person_id, email, display_name, total_spend, payment_count, refunded_volume
 
 ## SQL Rules
-- ALWAYS use serving.* views — NEVER JOIN tables manually
-- NEVER include person_id, donation_id, or any _id column in SELECT output — they are internal keys
-- ALWAYS add: WHERE display_name <> 'Unknown' — when querying donors or top-N lists
-- For donors: use donor_summary or donor_monthly, never CTEs on donation_detail
+- NEVER include person_id, donation_id, or any _id column in SELECT output
+- ALWAYS add WHERE display_name <> 'Unknown' on top-N or donor queries
+- Use serving.* views for identity-resolved queries (they have person_id + display_name)
+- Use silver.* tables directly when you need columns not in serving views, or for source-specific analysis
+- For person demographics across all 89K people: use silver.contact + silver.identity_map
+- For donor rankings/totals: use donor_summary (pre-aggregated). For monthly trends: use donor_monthly.
+- NEVER self-join donor_monthly or donation_detail — use subqueries or window functions
+- Commerce totals (order_detail.total_amount, person_360.total_spent) ONLY include items classified as 'commerce' in silver.product_classification. Donations, subscriptions, events, shipping, and tax are excluded. Donations are tracked separately in serving.donation_detail and donor_summary.
+- For drill_down_table: return ONLY detail columns. Widget auto-computes group totals.
 - TOP (N) with parens, DATEADD(YEAR,-2,GETDATE()) for relative dates
-- display_name is unique enough for display — just SELECT display_name, never concatenate IDs
-- NEVER self-join donor_monthly or donation_detail — self-joins cause row duplication that inflates SUM/COUNT. Use subqueries or window functions instead.
-- For drill_down_table: return ONLY the detail columns (display_name, month, amount). The widget auto-computes group totals. NEVER include a pre-computed total column alongside detail rows — it causes double-counting.
-- When you need to ORDER BY a period total but SHOW monthly detail, use a subquery for the ranking and a separate query for detail, or use a window function: SUM(amount) OVER (PARTITION BY person_id) as period_total — but ONLY if querying a single table with no JOINs.
+- SELECT only the columns the user asks for — never dump all columns
 
 ## Query Patterns
-Top 20 donors (lifetime): SELECT TOP (20) display_name, total_given, donation_count, avg_gift, last_gift_date FROM serving.donor_summary WHERE display_name <> 'Unknown' ORDER BY total_given DESC
-
-Top 20 donors monthly (by lifetime giving): SELECT m.display_name, m.donation_month, m.amount FROM serving.donor_monthly m WHERE m.person_id IN (SELECT TOP (20) person_id FROM serving.donor_summary WHERE display_name <> 'Unknown' ORDER BY total_given DESC) AND m.donation_month >= FORMAT(DATEADD(YEAR,-2,GETDATE()),'yyyy-MM') ORDER BY m.display_name, m.donation_month
-→ Use drill_down_table with groupKey='display_name', detailColumns=['donation_month','amount']
-
-Top 20 donors by 2-year consolidated total with monthly detail: SELECT m.display_name, m.donation_month, m.amount FROM serving.donor_monthly m WHERE m.donation_month >= FORMAT(DATEADD(YEAR,-2,GETDATE()),'yyyy-MM') AND m.display_name <> 'Unknown' AND m.person_id IN (SELECT TOP (20) person_id FROM serving.donor_monthly WHERE donation_month >= FORMAT(DATEADD(YEAR,-2,GETDATE()),'yyyy-MM') AND display_name <> 'Unknown' GROUP BY person_id ORDER BY SUM(amount) DESC) ORDER BY (SELECT SUM(x.amount) FROM serving.donor_monthly x WHERE x.person_id = m.person_id AND x.donation_month >= FORMAT(DATEADD(YEAR,-2,GETDATE()),'yyyy-MM')) DESC, m.display_name, m.donation_month
-→ Use drill_down_table with groupKey='display_name', detailColumns=['donation_month','amount']
-→ The widget will auto-sum the amount column per donor — do NOT add a total column
+Top N donors: SELECT TOP (N) display_name, total_given, avg_gift, last_gift_date, lifecycle_stage FROM serving.donor_summary WHERE display_name <> 'Unknown' ORDER BY total_given DESC
+Monthly trends: SELECT m.display_name, m.donation_month, m.amount FROM serving.donor_monthly m WHERE m.person_id IN (SELECT TOP (N) person_id FROM serving.donor_summary WHERE display_name <> 'Unknown' ORDER BY total_given DESC) ORDER BY m.display_name, m.donation_month
+Cross-domain: JOIN serving views on person_id to combine giving + commerce + events for the same person
 `.trim();

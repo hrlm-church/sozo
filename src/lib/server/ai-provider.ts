@@ -5,8 +5,9 @@ import { getServerEnv, looksConfigured } from "@/lib/server/env";
 import type { LanguageModel } from "ai";
 
 /**
- * Provider chain: Claude → OpenAI → Azure OpenAI
- * Returns all configured models in priority order for fallback.
+ * Provider chain: OpenAI → Azure OpenAI → Claude
+ * Claude has a 10K input token/min limit (too low for our system prompt).
+ * OpenAI (500K TPM) is the practical primary.
  */
 
 let _anthropic: ReturnType<typeof createAnthropic> | null = null;
@@ -56,26 +57,26 @@ function extractResourceName(endpoint: string): string {
 export function getModelChain(): LanguageModel[] {
   const models: LanguageModel[] = [];
 
-  // 1. Anthropic Claude (primary — best tool use, high rate limits)
-  const anthropic = getAnthropicProvider();
-  if (anthropic) {
-    const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5-20250929";
-    models.push(anthropic(model));
-  }
-
-  // 2. OpenAI (fallback — 500K TPM limit can be hit on large queries)
+  // 1. OpenAI (primary — 500K TPM, best for most queries)
   const openai = getOpenAIProvider();
   if (openai) {
-    const model = process.env.OPENAI_MODEL ?? "gpt-5.2";
+    const model = process.env.OPENAI_MODEL ?? "gpt-4o";
     models.push(openai(model));
   }
 
-  // 3. Azure OpenAI
+  // 2. Azure OpenAI (fallback)
   const azure = getAzureProvider();
   if (azure) {
     const env = getServerEnv();
     const deployment = env.openAiReasoningDeployment ?? env.openAiDeployment;
     if (deployment) models.push(azure(deployment));
+  }
+
+  // 3. Anthropic Claude (last resort — 10K input token/min limit is very restrictive)
+  const anthropic = getAnthropicProvider();
+  if (anthropic) {
+    const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5-20250929";
+    models.push(anthropic(model));
   }
 
   if (models.length === 0) {

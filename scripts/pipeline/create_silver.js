@@ -227,6 +227,19 @@ const TABLES = [
     )`
   },
   {
+    name: 'silver.product_classification',
+    ddl: `CREATE TABLE silver.product_classification (
+      classification_id  INT IDENTITY(1,1) PRIMARY KEY,
+      product_keap_id    INT NULL,
+      item_name_pattern  NVARCHAR(500) NULL,
+      revenue_category   VARCHAR(50) NOT NULL,
+      subcategory        VARCHAR(100) NULL,
+      match_priority     INT DEFAULT 100,
+      notes              NVARCHAR(500) NULL,
+      created_at         DATETIME2 DEFAULT GETDATE()
+    )`
+  },
+  {
     name: 'silver.tag',
     ddl: `CREATE TABLE silver.tag (
       tag_id             INT IDENTITY(1,1) PRIMARY KEY,

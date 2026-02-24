@@ -233,6 +233,11 @@ export function ChatPanel() {
     return active;
   }
 
+  // True when only the auto-greeting exchange exists (no real user messages yet)
+  const greetingOnly = messages.length > 0 && messages.every(
+    (m) => m.role === "assistant" || (m.role === "user" && getTextContent(m) === "[GREETING]"),
+  );
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -489,6 +494,9 @@ export function ChatPanel() {
                   </div>
                 );
               })()}
+            {greetingOnly && !isLoading && (
+              <SuggestedPrompts onSelect={handleSuggestedPrompt} compact />
+            )}
           </div>
         )}
       </div>
