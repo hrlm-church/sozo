@@ -15,8 +15,13 @@ import type { Widget, WidgetType, WidgetConfig } from "@/types/widget";
  * the LLM to re-emit every row as tool-call arguments (saves tokens,
  * avoids truncation on large result sets).
  */
+// Normalize SQL for map key: collapse whitespace, trim, strip trailing semicolons
+function sqlKey(s: string): string {
+  return s.replace(/\s+/g, " ").trim().replace(/;+$/, "");
+}
+
 export function getChatTools(ownerEmail?: string) {
-  // Shared state: query results keyed by SQL string so show_widget can
+  // Shared state: query results keyed by normalized SQL so show_widget can
   // reference the correct dataset when multiple queries run in one step.
   const queryResultMap = new Map<string, Record<string, unknown>[]>();
   let lastQueryRows: Record<string, unknown>[] = [];
@@ -50,14 +55,11 @@ export function getChatTools(ownerEmail?: string) {
             sql: guard.sanitized,
           };
         }
-        // Store for show_widget to use (map by both raw + sanitized SQL, plus last for fallback)
+        // Store for show_widget to use (keyed by normalized raw + sanitized SQL)
         lastQueryRows = result.rows;
         lastQuerySql = guard.sanitized;
-        const rawKey = rawSql.trim().replace(/;+\s*$/, "");
-        queryResultMap.set(rawKey, result.rows);
-        if (guard.sanitized && guard.sanitized !== rawKey) {
-          queryResultMap.set(guard.sanitized, result.rows);
-        }
+        queryResultMap.set(sqlKey(rawSql), result.rows);
+        if (guard.sanitized) queryResultMap.set(sqlKey(guard.sanitized), result.rows);
         return {
           ok: true as const,
           rowCount: result.rows.length,
@@ -182,12 +184,13 @@ export function getChatTools(ownerEmail?: string) {
           .describe("The SQL query that produced this data (for reference)"),
       }),
       execute: async ({ type, title, data, config, sql: sqlQuery }) => {
-        // Use provided data if non-empty, then try matching by SQL key, then fall back to last query
+        // Use provided data if non-empty, then try matching by normalized SQL key, then fall back
         const widgetSql = sqlQuery ?? lastQuerySql;
+        const normalizedKey = widgetSql ? sqlKey(widgetSql) : undefined;
         const widgetData = (data && data.length > 0)
           ? data
-          : (widgetSql && queryResultMap.has(widgetSql))
-            ? queryResultMap.get(widgetSql)!
+          : (normalizedKey && queryResultMap.has(normalizedKey))
+            ? queryResultMap.get(normalizedKey)!
             : lastQueryRows;
 
         const widget: Widget = {
