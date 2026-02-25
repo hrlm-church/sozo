@@ -31,7 +31,7 @@ export function getChatTools(ownerEmail?: string) {
     query_data: tool({
       description:
         "Execute a read-only SQL SELECT query against Azure SQL. " +
-        "Returns up to 500 rows. Use this to fetch data before showing a widget. " +
+        "Returns up to 500 rows. You see a preview (first 15 rows); full data is stored for show_widget. " +
         "Only SELECT and WITH (CTE) queries are allowed. " +
         "The query results are automatically available to show_widget — " +
         "you do NOT need to pass the data rows again.",
@@ -60,12 +60,18 @@ export function getChatTools(ownerEmail?: string) {
         lastQuerySql = guard.sanitized;
         queryResultMap.set(sqlKey(rawSql), result.rows);
         if (guard.sanitized) queryResultMap.set(sqlKey(guard.sanitized), result.rows);
+        // Return preview to model (saves tokens), full data stays in map for widgets
+        const PREVIEW_LIMIT = 15;
+        const preview = result.rows.length > PREVIEW_LIMIT
+          ? result.rows.slice(0, PREVIEW_LIMIT)
+          : result.rows;
         return {
           ok: true as const,
           rowCount: result.rows.length,
-          data: result.rows,
+          data: preview,
           sql: guard.sanitized,
           purpose,
+          ...(result.rows.length > PREVIEW_LIMIT && { note: `Showing ${PREVIEW_LIMIT} of ${result.rows.length} rows. Full data available in widget.` }),
         };
       },
     }),
