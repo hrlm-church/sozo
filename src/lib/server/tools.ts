@@ -16,7 +16,9 @@ import type { Widget, WidgetType, WidgetConfig } from "@/types/widget";
  * avoids truncation on large result sets).
  */
 export function getChatTools(ownerEmail?: string) {
-  // Shared state: last successful query result, keyed by sql string
+  // Shared state: query results keyed by SQL string so show_widget can
+  // reference the correct dataset when multiple queries run in one step.
+  const queryResultMap = new Map<string, Record<string, unknown>[]>();
   let lastQueryRows: Record<string, unknown>[] = [];
   let lastQuerySql: string | undefined;
 
@@ -48,9 +50,10 @@ export function getChatTools(ownerEmail?: string) {
             sql: guard.sanitized,
           };
         }
-        // Store for show_widget to use
+        // Store for show_widget to use (both map + last for fallback)
         lastQueryRows = result.rows;
         lastQuerySql = guard.sanitized;
+        if (guard.sanitized) queryResultMap.set(guard.sanitized, result.rows);
         return {
           ok: true as const,
           rowCount: result.rows.length,
@@ -175,9 +178,13 @@ export function getChatTools(ownerEmail?: string) {
           .describe("The SQL query that produced this data (for reference)"),
       }),
       execute: async ({ type, title, data, config, sql: sqlQuery }) => {
-        // Use provided data if non-empty, otherwise fall back to last query result
-        const widgetData = (data && data.length > 0) ? data : lastQueryRows;
+        // Use provided data if non-empty, then try matching by SQL key, then fall back to last query
         const widgetSql = sqlQuery ?? lastQuerySql;
+        const widgetData = (data && data.length > 0)
+          ? data
+          : (widgetSql && queryResultMap.has(widgetSql))
+            ? queryResultMap.get(widgetSql)!
+            : lastQueryRows;
 
         const widget: Widget = {
           id: crypto.randomUUID(),
