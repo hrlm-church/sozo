@@ -50,10 +50,14 @@ export function getChatTools(ownerEmail?: string) {
             sql: guard.sanitized,
           };
         }
-        // Store for show_widget to use (both map + last for fallback)
+        // Store for show_widget to use (map by both raw + sanitized SQL, plus last for fallback)
         lastQueryRows = result.rows;
         lastQuerySql = guard.sanitized;
-        if (guard.sanitized) queryResultMap.set(guard.sanitized, result.rows);
+        const rawKey = rawSql.trim().replace(/;+\s*$/, "");
+        queryResultMap.set(rawKey, result.rows);
+        if (guard.sanitized && guard.sanitized !== rawKey) {
+          queryResultMap.set(guard.sanitized, result.rows);
+        }
         return {
           ok: true as const,
           rowCount: result.rows.length,
