@@ -517,7 +517,7 @@ const VIEWS = [
       WHERE c2.email_primary = COALESCE(et.buyer_email, et.attendee_email)
     ) el
     OUTER APPLY (
-      SELECT TOP 1 COALESCE(NULLIF(c3.first_name,'NULL') + ' ' + NULLIF(c3.last_name,'NULL'), NULLIF(c3.first_name,'NULL'), 'Unknown') AS first_name, NULLIF(c3.last_name,'NULL') AS last_name, c3.email_primary
+      SELECT TOP 1 NULLIF(c3.first_name,'NULL') AS first_name, NULLIF(c3.last_name,'NULL') AS last_name, c3.email_primary
       FROM silver.identity_map im3 JOIN silver.contact c3 ON c3.contact_id = im3.contact_id
       WHERE im3.master_id = el.master_id AND im3.is_primary = 1
     ) pc`
