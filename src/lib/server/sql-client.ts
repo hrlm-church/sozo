@@ -16,7 +16,7 @@ function getPoolConfig(): sql.config {
     options: { encrypt: true, trustServerCertificate: false },
     pool: { max: 5, min: 0, idleTimeoutMillis: 30000 },
     connectionTimeout: 15000,
-    requestTimeout: 15000,
+    requestTimeout: 30000,
   };
 }
 
