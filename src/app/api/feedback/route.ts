@@ -36,6 +36,29 @@ export async function POST(request: Request) {
       )
     `);
 
+    // Adjust knowledge confidence based on feedback
+    if (conversationId) {
+      if (rating === -1) {
+        // Thumbs down: demote knowledge from this conversation
+        await executeSql(`
+          UPDATE sozo.knowledge
+          SET confidence = CASE WHEN confidence - 0.15 < 0.10 THEN 0.10 ELSE confidence - 0.15 END,
+              updated_at = SYSUTCDATETIME()
+          WHERE source_conv_id = '${esc(conversationId)}'
+            AND is_active = 1
+        `).catch(() => { /* non-critical */ });
+      } else if (rating === 1) {
+        // Thumbs up: boost knowledge from this conversation
+        await executeSql(`
+          UPDATE sozo.knowledge
+          SET confidence = CASE WHEN confidence + 0.05 > 1.00 THEN 1.00 ELSE confidence + 0.05 END,
+              updated_at = SYSUTCDATETIME()
+          WHERE source_conv_id = '${esc(conversationId)}'
+            AND is_active = 1
+        `).catch(() => { /* non-critical */ });
+      }
+    }
+
     return NextResponse.json({ id, saved: true });
   } catch (error) {
     return NextResponse.json(

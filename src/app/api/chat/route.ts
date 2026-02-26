@@ -3,7 +3,9 @@ import type { UIMessage } from "ai";
 import { getModelChain } from "@/lib/server/ai-provider";
 import { getChatTools } from "@/lib/server/tools";
 import { SCHEMA_CONTEXT } from "@/lib/server/schema-context";
-import { getRecentInsights, getUserMemory } from "@/lib/server/insights";
+import { getRecentInsights } from "@/lib/server/insights";
+import { getActiveKnowledge, formatKnowledgeForPrompt, formatMemoriesForPrompt } from "@/lib/server/memory";
+import { memorySearch } from "@/lib/server/memory-search";
 import { getSessionEmail } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
@@ -58,21 +60,25 @@ Rules:
 - NEVER mention "[GREETING]" or reveal this is automated.
 - No widgets on greetings.
 
-## Memory System
-You have two memory tools:
+## Learning System
+You have two learning tools:
 1. **save_insight** — For specific data findings from queries (expire after 30 days)
-2. **update_memory** — Your permanent brain. A curated markdown document that persists forever across all conversations.
+2. **save_knowledge** — For permanent learnings. Use when:
+   - The user CORRECTS you (category: "correction") — save IMMEDIATELY
+   - The user expresses a PREFERENCE for how they want data shown (category: "preference")
+   - You discover a REUSABLE data pattern worth remembering (category: "pattern")
+   - The user tells you an organizational FACT not in the database (category: "fact")
+   - You learn something about THIS USER's role or interests (category: "persona")
 
-### How update_memory works:
-- Your current memory document (if any) is loaded below under "Your Memory".
-- After any meaningful exchange, call update_memory with the COMPLETE updated document.
-- The document REPLACES the previous version — so always include everything you want to keep.
-- Organize it by sections: ## Corrections, ## User Preferences, ## Data Patterns, ## Topics Explored
-- Keep it concise — under 2000 characters. Remove outdated info, merge duplicates.
-- Save corrections IMMEDIATELY when the user tells you something is wrong.
+### Rules:
+- Each save_knowledge call saves ONE specific fact. Keep it to 1 clear sentence.
+- Corrections are highest priority — save immediately when the user says you're wrong.
+- Do NOT save trivial things or things already in your knowledge base below.
+- Do NOT rewrite your whole knowledge — that's done automatically after each conversation.
+- Your knowledge base and relevant past conversation summaries are loaded below.
 
 ### CRITICAL: Silent knowledge
-- NEVER explicitly reference your memory in conversation. Don't say "Last time we discussed..." or "Based on my memory..." or "I remember you care about..."
+- NEVER explicitly reference your knowledge or memory in conversation. Don't say "Last time we discussed..." or "Based on my memory..." or "I remember you care about..."
 - Instead, just silently KNOW things and let that knowledge shape your responses naturally.
 - If you know this user cares about donor retention, naturally emphasize retention angles — but don't announce that you're doing it.
 
@@ -101,7 +107,7 @@ You have two memory tools:
 2. **search_data** — Semantic search across all person profiles. Use for behavioral/discovery questions.
 3. **show_widget** — Display interactive visualization. Types: kpi, stat_grid, bar_chart, line_chart, area_chart, donut_chart, table, drill_down_table, funnel, text.
 4. **save_insight** — Save a specific data finding (expires in 30 days). Use for notable query results.
-5. **update_memory** — Update your persistent memory document. Use after every meaningful exchange to save corrections, preferences, learnings, and patterns permanently.
+5. **save_knowledge** — Save a specific permanent learning (correction, preference, pattern, fact, persona). One fact per call.
 
 ## Reasoning & Workflow
 Before answering, THINK about what the user really needs:
@@ -115,7 +121,7 @@ Before answering, THINK about what the user really needs:
 - You CAN chain multiple tools in one turn (up to 12 steps)
 
 **After your analysis**, use show_widget to visualize, then explain what the data means.
-**After every meaningful exchange**: call update_memory to save what you learned (corrections, user interests, data patterns). Read your existing memory first, then pass the complete updated version.
+**When the user corrects you or shares a preference**: call save_knowledge immediately with the specific fact.
 
 ## Profile / 360 Queries
 - **User specifies columns**: SELECT only those columns. If they say "bring only X, Y, Z", show ONLY X, Y, Z.
@@ -185,19 +191,57 @@ export async function POST(request: Request) {
     // Build system prompt with per-user context
     let systemPrompt = SYSTEM_PROMPT;
 
-    // Inject persistent user memory (curated document)
+    // 1. Inject structured knowledge base (corrections, preferences, patterns)
     try {
-      const memory = await getUserMemory(ownerEmail);
-      if (memory) {
-        systemPrompt += `\n\n## Your Memory (for ${ownerEmail})\nThis is your curated memory document. Use this knowledge silently — never reference it explicitly.\n\n${memory}`;
+      const knowledge = await getActiveKnowledge(ownerEmail);
+      if (knowledge.length > 0) {
+        const knowledgeText = formatKnowledgeForPrompt(knowledge);
+        systemPrompt += `\n\n## Your Knowledge Base (for ${ownerEmail})\nUse this knowledge silently — never reference it explicitly.\n\n${knowledgeText}`;
       }
     } catch {
       // Non-critical
     }
 
-    // Inject recent data insights (ephemeral findings)
+    // 2. Inject relevant past conversation summaries (semantic memory search)
     try {
-      const insightsText = await getRecentInsights(20, ownerEmail);
+      // Extract text from the first real user message (UIMessage uses parts[] in v6)
+      const getMessageText = (m: UIMessage): string => {
+        if ("content" in m && typeof m.content === "string") return m.content;
+        if (m.parts) {
+          return m.parts
+            .filter((p): p is { type: "text"; text: string } => p.type === "text")
+            .map((p) => p.text)
+            .join(" ");
+        }
+        return "";
+      };
+      const firstRealMsg = uiMessages.find(
+        (m) => m.role === "user" && getMessageText(m) !== "[GREETING]" && getMessageText(m).length > 0,
+      );
+      const firstMsgText = firstRealMsg ? getMessageText(firstRealMsg) : "";
+      if (firstMsgText) {
+        const memResults = await memorySearch(firstMsgText, ownerEmail, 5);
+        if (memResults.ok && memResults.results.length > 0) {
+          const memoriesText = formatMemoriesForPrompt(
+            memResults.results.map((r) => ({
+              conversation_id: r.conversation_id,
+              title: r.title,
+              content: r.content,
+              topics: r.topics,
+              created_at: r.created_at,
+              score: r.score,
+            })),
+          );
+          systemPrompt += `\n\n## Relevant Past Conversations\nContext from previous sessions that may be relevant:\n${memoriesText}`;
+        }
+      }
+    } catch {
+      // Non-critical
+    }
+
+    // 3. Inject recent data insights (ephemeral findings)
+    try {
+      const insightsText = await getRecentInsights(10, ownerEmail);
       if (insightsText) {
         systemPrompt += `\n\n## Recent Data Findings (from past 30 days)\n${insightsText}`;
       }

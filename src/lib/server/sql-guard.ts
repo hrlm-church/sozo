@@ -48,11 +48,13 @@ const ALLOWED_TABLES = new Set([
   "serving.event_detail",
   "serving.stripe_charge_detail",
   "serving.woo_order_detail",
-  // Sozo app tables (conversation, feedback, insights)
+  // Sozo app tables (conversation, feedback, insights, memory)
   "sozo.conversation",
   "sozo.conversation_message",
   "sozo.feedback",
   "sozo.insight",
+  "sozo.conversation_summary",
+  "sozo.knowledge",
   // Gold layer (analytical views)
   "gold.constituent_360",
   "gold.person",

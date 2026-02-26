@@ -30,7 +30,7 @@ const INDEX_NAME = "sozo-360-v1";
 /**
  * Generate embedding for a text query using OpenAI API.
  */
-async function getQueryEmbedding(text: string): Promise<number[] | null> {
+export async function getQueryEmbedding(text: string): Promise<number[] | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
