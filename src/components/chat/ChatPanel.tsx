@@ -151,6 +151,15 @@ export function ChatPanel() {
           }),
         });
         refreshList();
+
+        // Fire-and-forget: trigger memory processing (non-blocking)
+        if (serialized.length >= 4) {
+          fetch("/api/conversation/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ conversationId: convId }),
+          }).catch(() => { /* silent — processing is non-critical */ });
+        }
       } catch {
         // Silent fail — conversation will be saved on next message
       }

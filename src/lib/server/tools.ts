@@ -4,7 +4,8 @@ import { guardSql, QUERY_TIMEOUT_MS } from "@/lib/server/sql-guard";
 import { executeSql } from "@/lib/server/sql-client";
 import { hybridSearch } from "@/lib/server/search-client";
 
-import { saveInsight, saveUserMemory } from "@/lib/server/insights";
+import { saveInsight } from "@/lib/server/insights";
+import { saveKnowledge } from "@/lib/server/memory";
 import type { Widget, WidgetType, WidgetConfig } from "@/types/widget";
 
 /**
@@ -241,28 +242,37 @@ export function getChatTools(ownerEmail?: string) {
       },
     }),
 
-    update_memory: tool({
+    save_knowledge: tool({
       description:
-        "Update your persistent memory document for this user. This is your long-term brain — " +
-        "it gets loaded at the start of every future conversation. " +
-        "Pass the COMPLETE updated document (it replaces the previous version). " +
-        "Use this to remember: corrections the user made, what this user cares about, " +
-        "data patterns you've learned, preferences, and anything worth knowing permanently. " +
-        "Keep it organized, concise (under 2000 chars), and curated — remove outdated info, merge duplicates. " +
-        "Call this after every meaningful exchange where you learned something new.",
+        "Save a specific piece of knowledge you've learned. Use when the user " +
+        "corrects you, expresses a preference, or when you discover a reusable pattern. " +
+        "Each call saves ONE atomic fact. Do NOT try to save everything at once. " +
+        "For data findings from queries, use save_insight instead.",
       inputSchema: z.object({
-        memory: z
-          .string()
-          .max(4000)
+        category: z
+          .enum(["correction", "preference", "pattern", "fact", "persona"])
           .describe(
-            "The full memory document in markdown. Organized by sections like: " +
-            "## Corrections, ## User Preferences, ## Data Patterns, ## Topics Explored. " +
-            "This REPLACES the previous document entirely.",
+            "correction: user corrected you. preference: how user likes data presented. " +
+            "pattern: reusable data pattern. fact: organizational fact. persona: about this user.",
           ),
+        content: z
+          .string()
+          .max(500)
+          .describe("The specific thing to remember. One clear sentence."),
+        confidence: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.9)
+          .describe("How confident (1.0 = user explicitly stated, 0.7 = inferred)"),
+        supersedes: z
+          .string()
+          .optional()
+          .describe("If correcting previous knowledge, the ID of the old item"),
       }),
-      execute: async ({ memory }) => {
+      execute: async ({ category, content, confidence, supersedes }) => {
         if (!ownerEmail) return { ok: false, error: "No user session" };
-        const result = await saveUserMemory(ownerEmail, memory);
+        const result = await saveKnowledge(ownerEmail, category, content, confidence, supersedes);
         return result;
       },
     }),
