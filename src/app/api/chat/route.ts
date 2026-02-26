@@ -230,7 +230,9 @@ export async function POST(request: Request) {
         const blockText = guardrail.response ?? "That's outside what I can help with. Want to explore something in your ministry data?";
         const stream = createUIMessageStream({
           execute: async ({ writer }) => {
-            writer.write({ type: "text", text: blockText });
+            writer.write({ type: "text-start" });
+            writer.write({ type: "text-delta", textDelta: blockText });
+            writer.write({ type: "text-end" });
             writer.write({ type: "finish", finishReason: "stop", usage: { inputTokens: 0, outputTokens: 0 } });
           },
         });
