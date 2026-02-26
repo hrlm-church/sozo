@@ -8,6 +8,7 @@ import { getActiveKnowledge, formatKnowledgeForPrompt, formatMemoriesForPrompt }
 import { memorySearch } from "@/lib/server/memory-search";
 import { getSessionEmail } from "@/lib/server/session";
 import { checkGuardrail } from "@/lib/server/guardrail";
+import { matchRecipe } from "@/lib/server/recipes";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -164,56 +165,12 @@ Before answering, THINK about what the user really needs:
 | "tips" / "advice" / "what should we do" | text widget with 3-5 actionable markdown bullet points grounded in the data |
 | "lifecycle" or stage definitions | Include a text widget legend: Active (≤6mo), Cooling (6-12mo), Lapsed (12-24mo), Lost (24+mo) |
 
-### Exact Recipes for Common Prompts
-Follow these EXACTLY — same queries, same widgets, same order, every time.
+### Recipes
+When a MANDATORY RECIPE section appears at the end of this prompt, you MUST use those exact SQL queries word-for-word. Do not improvise, do not modify column names, do not change JOINs or sort order. The recipe queries have been carefully tested and verified. Your job is to execute them and provide analysis of the results.
 
-#### "360 view of top N donors" / "top donors with details"
-Always 4 widgets in this exact order:
-
-**Query 1 — Group stats** (for stat_grid):
-SELECT COUNT(*) AS total, SUM(CAST(total_given AS DECIMAL(12,2))) AS giving, CAST(ROUND(AVG(CAST(total_given AS DECIMAL(12,2))),2) AS DECIMAL(12,2)) AS avg, SUM(CASE WHEN lifecycle_stage='Active' THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN lifecycle_stage IN ('Cooling','Lapsed') THEN 1 ELSE 0 END) AS at_risk FROM (SELECT TOP (N) total_given, lifecycle_stage FROM serving.donor_summary WHERE display_name<>'Unknown' ORDER BY total_given DESC) x
-→ **stat_grid**: stats=[{label:"Donors",value:total},{label:"Total Given",value:giving,unit:"$"},{label:"Avg Given",value:avg,unit:"$"},{label:"Active",value:active},{label:"At Risk",value:at_risk}]
-
-**Query 2 — Lifecycle distribution** (for donut_chart):
-SELECT lifecycle_stage AS [Stage], COUNT(*) AS [Donors] FROM (SELECT TOP (N) lifecycle_stage FROM serving.donor_summary WHERE display_name<>'Unknown' ORDER BY total_given DESC) x GROUP BY lifecycle_stage
-→ **donut_chart**: categoryKey='Stage', valueKeys=['Donors']
-
-**Query 3 — Full 360 table** (the main data):
-WITH t AS (SELECT TOP (N) ds.person_id, ds.display_name AS [Donor], CAST(ds.total_given AS DECIMAL(12,2)) AS [Total Given], ds.donation_count AS [Gifts], CAST(ROUND(ds.avg_gift,2) AS DECIMAL(12,2)) AS [Avg Gift], ds.last_gift_date AS [Last Gift], DATEDIFF(DAY,ds.last_gift_date,GETDATE()) AS [Days Silent], ds.lifecycle_stage AS [Stage] FROM serving.donor_summary ds WHERE ds.display_name<>'Unknown' ORDER BY ds.total_given DESC), comm AS (SELECT od.person_id, COUNT(*) AS [Orders], SUM(CAST(od.total_amount AS DECIMAL(12,2))) AS [Commerce $] FROM serving.order_detail od WHERE od.person_id IN (SELECT person_id FROM t) GROUP BY od.person_id), evt AS (SELECT ed.person_id, COUNT(*) AS [Tickets] FROM serving.event_detail ed WHERE ed.person_id IN (SELECT person_id FROM t) GROUP BY ed.person_id), sub AS (SELECT sd.person_id, MAX(CASE WHEN sd.source_system='subbly' AND sd.subscription_status='Active' THEN 'Yes' ELSE 'No' END) AS [Active Sub] FROM serving.subscription_detail sd WHERE sd.person_id IN (SELECT person_id FROM t) GROUP BY sd.person_id), w AS (SELECT ws.person_id, ws.capacity_label AS [Capacity] FROM serving.wealth_screening ws WHERE ws.person_id IN (SELECT person_id FROM t)) SELECT t.[Donor], t.[Total Given], t.[Gifts], t.[Avg Gift], t.[Last Gift], t.[Days Silent], t.[Stage], ISNULL(comm.[Orders],0) AS [Orders], ISNULL(comm.[Commerce $],0) AS [Commerce $], ISNULL(evt.[Tickets],0) AS [Tickets], ISNULL(sub.[Active Sub],'No') AS [Active Sub], w.[Capacity] FROM t LEFT JOIN comm ON comm.person_id=t.person_id LEFT JOIN evt ON evt.person_id=t.person_id LEFT JOIN sub ON sub.person_id=t.person_id LEFT JOIN w ON w.person_id=t.person_id ORDER BY t.[Total Given] DESC
-→ **table**: title="Top N Donors — 360 View"
-
-**Widget 4 — text**: Strategic analysis — who's at risk (Cooling/Lapsed with high giving + high days silent), who's undertapped (low giving vs wealth capacity), who needs a call this week. Name specific people with dollar amounts. Keep to 4-5 bullet points.
-
-#### "Giving trends" / "story of giving" / "what's happening with giving"
-**Query**: SELECT FORMAT(donated_at,'yyyy-MM') AS [Month], SUM(CAST(amount AS DECIMAL(12,2))) AS [Total], COUNT(*) AS [Gifts], COUNT(DISTINCT person_id) AS [Donors] FROM serving.donation_detail WHERE donated_at >= DATEADD(YEAR,-3,GETDATE()) GROUP BY FORMAT(donated_at,'yyyy-MM') ORDER BY [Month]
-→ **area_chart**: categoryKey='Month', valueKeys=['Total'] — title="Giving Trend"
-→ **stat_grid**: Summarize: total given across period, total gifts, unique donors, avg monthly giving
-→ **text**: Analysis of trends — what months spike, seasonality, year-over-year direction, any concerning drops
-
-#### "Year-over-year" / "compare years"
-**Query**: SELECT YEAR(donated_at) AS [Year], SUM(CAST(amount AS DECIMAL(12,2))) AS [Total], COUNT(*) AS [Gifts], COUNT(DISTINCT person_id) AS [Donors] FROM serving.donation_detail GROUP BY YEAR(donated_at) ORDER BY [Year]
-→ **bar_chart**: categoryKey='Year', valueKeys=['Total','Donors']
-
-#### "Cross-channel champions" / "multi-channel supporters"
-Use multiple queries joining donor_summary + order_detail + event_detail + subscription_detail on person_id to find people active in 3+ channels → table + text analysis
-
-#### "Capacity vs giving" / "wealth gap" / "untapped capacity" / wealth-screened dashboard
-Always 4 widgets in this exact order. IMPORTANT: Start from wealth_screening and LEFT JOIN donor_summary — this includes ALL screened contacts (~1,109), not just the ~240 who have donated.
-NOTE: giving_capacity is an ANNUAL estimate. Always compare it against annualized giving (total_given / years active), NEVER against lifetime total_given directly.
-
-**Query 1 — KPI stats** (for stat_grid):
-SELECT COUNT(*) AS screened, CAST(SUM(ws.giving_capacity - ISNULL(ds.total_given / NULLIF(CEILING(DATEDIFF(MONTH,ds.first_gift_date,GETDATE())/12.0),0),0)) AS DECIMAL(14,0)) AS unrealized_annual, CAST(ROUND(AVG(CASE WHEN ws.giving_capacity>0 THEN ISNULL(ds.total_given / NULLIF(CEILING(DATEDIFF(MONTH,ds.first_gift_date,GETDATE())/12.0),0),0)/ws.giving_capacity*100 ELSE 0 END),1) AS DECIMAL(5,1)) AS avg_util, SUM(CASE WHEN ws.giving_capacity>0 AND ISNULL(ds.total_given / NULLIF(CEILING(DATEDIFF(MONTH,ds.first_gift_date,GETDATE())/12.0),0),0) < ws.giving_capacity*0.1 THEN 1 ELSE 0 END) AS below_10pct FROM serving.wealth_screening ws LEFT JOIN serving.donor_summary ds ON ds.person_id=ws.person_id WHERE ws.display_name<>'Unknown'
-→ **stat_grid**: stats=[{label:"Screened Contacts",value:screened},{label:"Unrealized Annual Capacity",value:unrealized_annual,unit:"$"},{label:"Avg Annual Utilization",value:avg_util+"%"},{label:"Below 10% Capacity",value:below_10pct}]
-
-**Query 2 — Distribution** (for bar_chart):
-SELECT CASE WHEN ann_util < 1 THEN '0-1%' WHEN ann_util < 5 THEN '1-5%' WHEN ann_util < 10 THEN '5-10%' WHEN ann_util < 25 THEN '10-25%' WHEN ann_util < 50 THEN '25-50%' WHEN ann_util < 100 THEN '50-99%' ELSE '100%+' END AS [Utilization Range], COUNT(*) AS [Contacts] FROM (SELECT ISNULL(ds.total_given / NULLIF(CEILING(DATEDIFF(MONTH,ds.first_gift_date,GETDATE())/12.0),0),0) / NULLIF(ws.giving_capacity,0)*100 AS ann_util FROM serving.wealth_screening ws LEFT JOIN serving.donor_summary ds ON ds.person_id=ws.person_id WHERE ws.display_name<>'Unknown' AND ws.giving_capacity>0) x GROUP BY CASE WHEN ann_util < 1 THEN '0-1%' WHEN ann_util < 5 THEN '1-5%' WHEN ann_util < 10 THEN '5-10%' WHEN ann_util < 25 THEN '10-25%' WHEN ann_util < 50 THEN '25-50%' WHEN ann_util < 100 THEN '50-99%' ELSE '100%+' END ORDER BY MIN(ann_util)
-→ **bar_chart**: categoryKey='Utilization Range', valueKeys=['Contacts'], title="Annual Giving-to-Capacity Distribution"
-
-**Query 3 — Full table** sorted by gap:
-SELECT ws.display_name AS [Contact], ws.capacity_label AS [Tier], CAST(ISNULL(ds.total_given / NULLIF(CEILING(DATEDIFF(MONTH,ds.first_gift_date,GETDATE())/12.0),0),0) AS DECIMAL(12,2)) AS [Avg Annual Giving], CAST(ws.giving_capacity AS DECIMAL(12,2)) AS [Annual Capacity], CAST(ws.giving_capacity - ISNULL(ds.total_given / NULLIF(CEILING(DATEDIFF(MONTH,ds.first_gift_date,GETDATE())/12.0),0),0) AS DECIMAL(12,2)) AS [Annual Gap], CAST(ROUND(ISNULL(ds.total_given / NULLIF(CEILING(DATEDIFF(MONTH,ds.first_gift_date,GETDATE())/12.0),0),0)/NULLIF(ws.giving_capacity,0)*100,1) AS DECIMAL(5,1)) AS [% Utilized] FROM serving.wealth_screening ws LEFT JOIN serving.donor_summary ds ON ds.person_id=ws.person_id WHERE ws.display_name<>'Unknown' ORDER BY [Annual Gap] DESC
-→ **table**: title="Wealth-Screened Contacts — Annual Capacity vs. Avg Annual Giving (Sorted by Gap)"
-
-**Widget 4 — text**: Strategic analysis — who are the biggest opportunities by name, which tiers have the most unrealized annual capacity, how many screened contacts have NEVER donated (gap = 100% of capacity), specific outreach recommendations.
+#### General guidance for queries without a recipe:
+- "Cross-channel champions" / "multi-channel supporters": Use multiple queries joining donor_summary + order_detail + event_detail + subscription_detail on person_id to find people active in 3+ channels → table + text analysis
+- giving_capacity in wealth_screening is an ANNUAL estimate — always compare against annualized giving (total_given / years active), NEVER against lifetime total_given
 
 ## CRITICAL SQL Rules
 - NEVER include person_id, donation_id, or any _id column in SELECT
@@ -347,6 +304,13 @@ export async function POST(request: Request) {
       }
     } catch {
       // Non-critical
+    }
+
+    // 4. Match recipes — inject at the END of system prompt for maximum attention
+    const recipeMatch = matchRecipe(lastUserText);
+    if (recipeMatch) {
+      console.log("[chat] Recipe matched:", recipeMatch.recipe.id, "for:", lastUserText.slice(0, 60));
+      systemPrompt += `\n\n${recipeMatch.instruction}`;
     }
 
     // Try each model in order — fallback on rate limit or provider errors
