@@ -43,8 +43,8 @@ tag_group values: 'Donor Assignment','True Girl','B2BB','Nurture Tags','Customer
 serving.communication_detail (24K) — person_id, display_name, channel, direction, subject, sent_at
 
 ### Wealth Screening (1.1K screened contacts)
-serving.wealth_screening (1.1K) — person_id, display_name, email, giving_capacity, capacity_label ('Ultra High ($250K+)':29, 'Very High ($100K-$250K)':114, 'High ($25K-$100K)':391, 'Medium ($10K-$25K)':178, 'Standard':397), quality_score
-JOIN to donor_summary on person_id to compare giving_capacity vs total_given.
+serving.wealth_screening (1.1K) — person_id, display_name, email, giving_capacity (ANNUAL estimate), capacity_label ('Ultra High ($250K+)':29, 'Very High ($100K-$250K)':114, 'High ($25K-$100K)':391, 'Medium ($10K-$25K)':178, 'Standard':397), quality_score
+JOIN to donor_summary on person_id. IMPORTANT: giving_capacity is ANNUAL — always compare against annualized giving (total_given / years active), never raw lifetime total_given.
 
 ### Special Views
 serving.lost_recurring_donors (383) — person_id, display_name, monthly_amount, annual_value, frequency, status, category. Lost MRR: $17K/month ($206K/year).
