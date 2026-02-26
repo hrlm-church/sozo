@@ -1,4 +1,4 @@
-import { streamText, stepCountIs, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse } from "ai";
+import { streamText, stepCountIs, convertToModelMessages } from "ai";
 import type { UIMessage } from "ai";
 import { getModelChain } from "@/lib/server/ai-provider";
 import { getChatTools } from "@/lib/server/tools";
@@ -228,15 +228,23 @@ export async function POST(request: Request) {
       const guardrail = await checkGuardrail(lastUserText);
       if (!guardrail.allowed) {
         const blockText = guardrail.response ?? "That's outside what I can help with. Want to explore something in your ministry data?";
-        const stream = createUIMessageStream({
-          execute: async ({ writer }) => {
-            writer.write({ type: "text-start" });
-            writer.write({ type: "text-delta", textDelta: blockText });
-            writer.write({ type: "text-end" });
-            writer.write({ type: "finish", finishReason: "stop", usage: { inputTokens: 0, outputTokens: 0 } });
+        // Build a minimal SSE response matching the UI message stream v1 protocol
+        const partId = crypto.randomUUID();
+        const chunks = [
+          { type: "text-start", id: partId },
+          { type: "text-delta", textDelta: blockText },
+          { type: "text-end" },
+          { type: "finish", finishReason: "stop", usage: { inputTokens: 0, outputTokens: 0 } },
+        ];
+        const sseBody = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n";
+        return new Response(sseBody, {
+          headers: {
+            "content-type": "text/event-stream",
+            "cache-control": "no-cache",
+            "connection": "keep-alive",
+            "x-vercel-ai-ui-message-stream": "v1",
           },
         });
-        return createUIMessageStreamResponse({ stream });
       }
     }
 
