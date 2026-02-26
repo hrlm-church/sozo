@@ -197,9 +197,22 @@ WITH t AS (SELECT TOP (N) ds.person_id, ds.display_name AS [Donor], CAST(ds.tota
 #### "Cross-channel champions" / "multi-channel supporters"
 Use multiple queries joining donor_summary + order_detail + event_detail + subscription_detail on person_id to find people active in 3+ channels → table + text analysis
 
-#### "Wealth gap" / "untapped capacity"
-**Query**: SELECT ds.display_name AS [Donor], CAST(ds.total_given AS DECIMAL(12,2)) AS [Total Given], CAST(ws.giving_capacity AS DECIMAL(12,2)) AS [Capacity], ws.capacity_label AS [Tier], CAST(ROUND(ds.total_given/NULLIF(ws.giving_capacity,0)*100,1) AS DECIMAL(5,1)) AS [% Utilized] FROM serving.donor_summary ds JOIN serving.wealth_screening ws ON ds.person_id=ws.person_id WHERE ds.display_name<>'Unknown' AND ds.total_given < ws.giving_capacity*0.1 ORDER BY ws.giving_capacity DESC
-→ **table** + **text** with action items
+#### "Capacity vs giving" / "wealth gap" / "untapped capacity" / wealth-screened dashboard
+Always 4 widgets in this exact order:
+
+**Query 1 — KPI stats** (for stat_grid):
+SELECT COUNT(*) AS screened, CAST(SUM(ws.giving_capacity - ds.total_given) AS DECIMAL(14,0)) AS unrealized, CAST(ROUND(AVG(CASE WHEN ws.giving_capacity>0 THEN ds.total_given/ws.giving_capacity*100 ELSE 0 END),1) AS DECIMAL(5,1)) AS avg_util, SUM(CASE WHEN ws.giving_capacity>0 AND ds.total_given < ws.giving_capacity*0.1 THEN 1 ELSE 0 END) AS below_10pct FROM serving.donor_summary ds JOIN serving.wealth_screening ws ON ds.person_id=ws.person_id WHERE ds.display_name<>'Unknown'
+→ **stat_grid**: stats=[{label:"Screened Donors",value:screened},{label:"Unrealized Capacity",value:unrealized,unit:"$"},{label:"Avg Utilization",value:avg_util+"%"},{label:"Below 10% Capacity",value:below_10pct}]
+
+**Query 2 — Distribution** (for bar_chart):
+SELECT CASE WHEN ds.total_given/NULLIF(ws.giving_capacity,0)*100 < 1 THEN '0-1%' WHEN ds.total_given/NULLIF(ws.giving_capacity,0)*100 < 5 THEN '1-5%' WHEN ds.total_given/NULLIF(ws.giving_capacity,0)*100 < 10 THEN '5-10%' WHEN ds.total_given/NULLIF(ws.giving_capacity,0)*100 < 25 THEN '10-25%' WHEN ds.total_given/NULLIF(ws.giving_capacity,0)*100 < 50 THEN '25-50%' ELSE '50%+' END AS [Utilization Range], COUNT(*) AS [Donors] FROM serving.donor_summary ds JOIN serving.wealth_screening ws ON ds.person_id=ws.person_id WHERE ds.display_name<>'Unknown' AND ws.giving_capacity>0 GROUP BY CASE WHEN ds.total_given/NULLIF(ws.giving_capacity,0)*100 < 1 THEN '0-1%' WHEN ds.total_given/NULLIF(ws.giving_capacity,0)*100 < 5 THEN '1-5%' WHEN ds.total_given/NULLIF(ws.giving_capacity,0)*100 < 10 THEN '5-10%' WHEN ds.total_given/NULLIF(ws.giving_capacity,0)*100 < 25 THEN '10-25%' WHEN ds.total_given/NULLIF(ws.giving_capacity,0)*100 < 50 THEN '25-50%' ELSE '50%+' END ORDER BY MIN(ds.total_given/NULLIF(ws.giving_capacity,0)*100)
+→ **bar_chart**: categoryKey='Utilization Range', valueKeys=['Donors'], title="Giving-to-Capacity Distribution"
+
+**Query 3 — Full table** sorted by gap:
+SELECT ds.display_name AS [Donor], ws.capacity_label AS [Tier], CAST(ds.total_given AS DECIMAL(12,2)) AS [Lifetime Giving], CAST(ws.giving_capacity AS DECIMAL(12,2)) AS [Capacity], CAST(ws.giving_capacity - ds.total_given AS DECIMAL(12,2)) AS [Gap], CAST(ROUND(ds.total_given/NULLIF(ws.giving_capacity,0)*100,1) AS DECIMAL(5,1)) AS [% Utilized] FROM serving.donor_summary ds JOIN serving.wealth_screening ws ON ds.person_id=ws.person_id WHERE ds.display_name<>'Unknown' ORDER BY [Gap] DESC
+→ **table**: title="Wealth-Screened Contacts — Capacity vs. Lifetime Giving (Sorted by Gap)"
+
+**Widget 4 — text**: Strategic analysis — who are the biggest opportunities by name, which tiers have the most unrealized capacity, specific outreach recommendations.
 
 ## CRITICAL SQL Rules
 - NEVER include person_id, donation_id, or any _id column in SELECT
@@ -349,6 +362,7 @@ export async function POST(request: Request) {
           maxRetries: 1,
           stopWhen: stepCountIs(12),
           temperature: 0,
+          seed: 42,
           onError: ({ error }) => {
             console.error("[chat] Stream error on model", i, ":", error);
           },

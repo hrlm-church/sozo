@@ -22,10 +22,12 @@ export function WidgetCard({ widget, children, onPin, onRemove, isPinned }: Widg
   const handleExportCSV = () => { exportCSV(widget.data, widget.title); setShowExport(false); };
   const handleExportXLSX = () => { exportXLSX(widget.data, widget.title); setShowExport(false); };
   const handleExportPDF = async () => {
+    setShowExport(false);
+    // Wait for dropdown to close before capturing (needed for chart fallback)
+    await new Promise((r) => setTimeout(r, 100));
     if (cardRef.current) {
       await exportPDF(cardRef.current, widget.title, widget);
     }
-    setShowExport(false);
   };
 
   return (
