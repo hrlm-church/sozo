@@ -1,4 +1,4 @@
-import { streamText, stepCountIs, convertToModelMessages, createUIMessageStreamResponse } from "ai";
+import { streamText, stepCountIs, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import type { UIMessage } from "ai";
 import { getModelChain } from "@/lib/server/ai-provider";
 import { getChatTools } from "@/lib/server/tools";
@@ -228,12 +228,13 @@ export async function POST(request: Request) {
       const guardrail = await checkGuardrail(lastUserText);
       if (!guardrail.allowed) {
         const blockText = guardrail.response ?? "That's outside what I can help with. Want to explore something in your ministry data?";
-        return createUIMessageStreamResponse({
+        const stream = createUIMessageStream({
           execute: async ({ writer }) => {
             writer.write({ type: "text", text: blockText });
             writer.write({ type: "finish", finishReason: "stop", usage: { inputTokens: 0, outputTokens: 0 } });
           },
         });
+        return createUIMessageStreamResponse({ stream });
       }
     }
 
