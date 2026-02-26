@@ -2,36 +2,36 @@
 
 const PROMPTS = [
   {
-    label: "Show me donors who gave over $1K but haven't given in 6+ months",
-    desc: "High-value churn risk — who needs outreach now",
+    label: "Build me an executive dashboard of our ministry's health",
+    desc: "The big picture — giving, engagement, and risk at a glance",
   },
   {
-    label: "Compare active vs cooling vs lapsed donors — count, total giving, and avg gift",
-    desc: "Donor health segmentation at a glance",
+    label: "Tell me the story of our giving over the last 3 years — what's working and what's fading?",
+    desc: "Trends, seasonality, and the inflection points that matter",
   },
   {
-    label: "Which donors also buy products and attend events?",
-    desc: "Multi-channel engaged supporters",
+    label: "Who are our hidden champions — people supporting us across every channel?",
+    desc: "The donors who also buy, attend, and subscribe",
   },
   {
-    label: "Show wealth-screened donors giving below 10% of their capacity",
-    desc: "Major gift prospects with untapped potential",
+    label: "Find the donors whose generosity doesn't match their wealth",
+    desc: "Untapped capacity hiding in our database",
   },
   {
-    label: "Show monthly giving trends for the last 24 months",
-    desc: "Revenue trajectory and seasonal patterns",
+    label: "What would we recover if we re-engaged our lapsed recurring donors?",
+    desc: "The $205K/year opportunity sitting in our data",
   },
   {
-    label: "Active Subbly subscribers — how many also donate?",
-    desc: "Subscription-to-donor conversion opportunity",
+    label: "Map our supporter journey — from first touch to loyal donor",
+    desc: "The lifecycle funnel that shows where people drop off",
   },
   {
-    label: "Show the 383 lost recurring donors ranked by annual value",
-    desc: "MRR recovery priorities — $205K/year at stake",
+    label: "Which events created the most new donors afterward?",
+    desc: "The conversion power of live experiences",
   },
   {
-    label: "Top 20 people by total engagement across giving, orders, events, and subscriptions",
-    desc: "Most connected supporters across all streams",
+    label: "Show me who's quietly slipping away — our biggest donors at risk right now",
+    desc: "The calls you need to make this week",
   },
 ];
 
