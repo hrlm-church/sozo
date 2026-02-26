@@ -48,6 +48,7 @@
     "ai": "^6.0.81",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.0",
+    "jspdf-autotable": "^5.0.7",
     "mssql": "^12.2.0",
     "nanoid": "^5.1.6",
     "next": "16.1.6",

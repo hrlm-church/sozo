@@ -23,7 +23,7 @@ export function WidgetCard({ widget, children, onPin, onRemove, isPinned }: Widg
   const handleExportXLSX = () => { exportXLSX(widget.data, widget.title); setShowExport(false); };
   const handleExportPDF = async () => {
     if (cardRef.current) {
-      await exportPDF(cardRef.current, widget.title);
+      await exportPDF(cardRef.current, widget.title, widget);
     }
     setShowExport(false);
   };
