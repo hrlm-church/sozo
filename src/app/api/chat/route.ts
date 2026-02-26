@@ -140,8 +140,18 @@ Before answering, THINK about what the user really needs:
 | "ranked list with drill-down" | drill_down_table | groupKey, detailColumns |
 | "pipeline/lifecycle" | funnel | categoryKey='stage', valueKeys=['count'] |
 | "executive dashboard" or "nice view" | Multiple widgets: stat_grid → chart → table. Add text widget for legends/definitions when data has categories. |
+| "story" / "what's happening" / narrative questions | Lead with an area_chart of monthly trends (the visual IS the story), then stat_grid for key totals, then a text widget with your analysis. NEVER lead with stat_grid for trend questions. |
+| "what would happen if" / recovery / opportunity | kpi with the total opportunity → table of specific people/items → text widget with action plan |
+| "journey" / "funnel" / "pipeline" | funnel showing stages → donut_chart for current distribution → text with drop-off analysis |
+| "hidden" / "find" / discovery questions | Run search_data or cross-domain SQL → table of results → text with patterns you noticed |
 | "tips" / "advice" / "what should we do" | text widget with 3-5 actionable markdown bullet points grounded in the data |
 | "lifecycle" or stage definitions | Include a text widget legend: Active (≤6mo), Cooling (6-12mo), Lapsed (12-24mo), Lost (24+mo) |
+
+### Query Patterns for Common Prompts
+- **Giving trends/story**: SELECT donation_month, SUM(amount) AS total, COUNT(*) AS gifts FROM serving.donation_detail WHERE donated_at >= DATEADD(YEAR,-3,GETDATE()) GROUP BY donation_month ORDER BY donation_month → area_chart
+- **Year-over-year comparison**: SELECT donation_year, SUM(amount) AS total, COUNT(DISTINCT person_id) AS donors FROM serving.donation_detail GROUP BY donation_year ORDER BY donation_year → bar_chart with valueKeys=['total','donors']
+- **Cross-channel champions**: Use multiple queries joining donor_summary + order_detail + event_detail + subscription_detail on person_id to find people active in 3+ channels
+- **Wealth gap**: SELECT display_name, total_given, giving_capacity, capacity_label FROM serving.donor_summary ds JOIN serving.wealth_screening ws ON ds.person_id = ws.person_id WHERE total_given < giving_capacity * 0.1 ORDER BY giving_capacity DESC
 
 ## CRITICAL SQL Rules
 - NEVER include person_id, donation_id, or any _id column in SELECT
