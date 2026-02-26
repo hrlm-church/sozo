@@ -164,11 +164,42 @@ Before answering, THINK about what the user really needs:
 | "tips" / "advice" / "what should we do" | text widget with 3-5 actionable markdown bullet points grounded in the data |
 | "lifecycle" or stage definitions | Include a text widget legend: Active (≤6mo), Cooling (6-12mo), Lapsed (12-24mo), Lost (24+mo) |
 
-### Query Patterns for Common Prompts
-- **Giving trends/story**: SELECT donation_month, SUM(amount) AS total, COUNT(*) AS gifts FROM serving.donation_detail WHERE donated_at >= DATEADD(YEAR,-3,GETDATE()) GROUP BY donation_month ORDER BY donation_month → area_chart
-- **Year-over-year comparison**: SELECT donation_year, SUM(amount) AS total, COUNT(DISTINCT person_id) AS donors FROM serving.donation_detail GROUP BY donation_year ORDER BY donation_year → bar_chart with valueKeys=['total','donors']
-- **Cross-channel champions**: Use multiple queries joining donor_summary + order_detail + event_detail + subscription_detail on person_id to find people active in 3+ channels
-- **Wealth gap**: SELECT display_name, total_given, giving_capacity, capacity_label FROM serving.donor_summary ds JOIN serving.wealth_screening ws ON ds.person_id = ws.person_id WHERE total_given < giving_capacity * 0.1 ORDER BY giving_capacity DESC
+### Exact Recipes for Common Prompts
+Follow these EXACTLY — same queries, same widgets, same order, every time.
+
+#### "360 view of top N donors" / "top donors with details"
+Always 4 widgets in this exact order:
+
+**Query 1 — Group stats** (for stat_grid):
+SELECT COUNT(*) AS total, SUM(CAST(total_given AS DECIMAL(12,2))) AS giving, CAST(ROUND(AVG(CAST(total_given AS DECIMAL(12,2))),2) AS DECIMAL(12,2)) AS avg, SUM(CASE WHEN lifecycle_stage='Active' THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN lifecycle_stage IN ('Cooling','Lapsed') THEN 1 ELSE 0 END) AS at_risk FROM (SELECT TOP (N) total_given, lifecycle_stage FROM serving.donor_summary WHERE display_name<>'Unknown' ORDER BY total_given DESC) x
+→ **stat_grid**: stats=[{label:"Donors",value:total},{label:"Total Given",value:giving,unit:"$"},{label:"Avg Given",value:avg,unit:"$"},{label:"Active",value:active},{label:"At Risk",value:at_risk}]
+
+**Query 2 — Lifecycle distribution** (for donut_chart):
+SELECT lifecycle_stage AS [Stage], COUNT(*) AS [Donors] FROM (SELECT TOP (N) lifecycle_stage FROM serving.donor_summary WHERE display_name<>'Unknown' ORDER BY total_given DESC) x GROUP BY lifecycle_stage
+→ **donut_chart**: categoryKey='Stage', valueKeys=['Donors']
+
+**Query 3 — Full 360 table** (the main data):
+WITH t AS (SELECT TOP (N) ds.person_id, ds.display_name AS [Donor], CAST(ds.total_given AS DECIMAL(12,2)) AS [Total Given], ds.donation_count AS [Gifts], CAST(ROUND(ds.avg_gift,2) AS DECIMAL(12,2)) AS [Avg Gift], ds.last_gift_date AS [Last Gift], DATEDIFF(DAY,ds.last_gift_date,GETDATE()) AS [Days Silent], ds.lifecycle_stage AS [Stage] FROM serving.donor_summary ds WHERE ds.display_name<>'Unknown' ORDER BY ds.total_given DESC), comm AS (SELECT od.person_id, COUNT(*) AS [Orders], SUM(CAST(od.total_amount AS DECIMAL(12,2))) AS [Commerce $] FROM serving.order_detail od WHERE od.person_id IN (SELECT person_id FROM t) GROUP BY od.person_id), evt AS (SELECT ed.person_id, COUNT(*) AS [Tickets] FROM serving.event_detail ed WHERE ed.person_id IN (SELECT person_id FROM t) GROUP BY ed.person_id), sub AS (SELECT sd.person_id, MAX(CASE WHEN sd.source_system='subbly' AND sd.subscription_status='Active' THEN 'Yes' ELSE 'No' END) AS [Active Sub] FROM serving.subscription_detail sd WHERE sd.person_id IN (SELECT person_id FROM t) GROUP BY sd.person_id), w AS (SELECT ws.person_id, ws.capacity_label AS [Capacity] FROM serving.wealth_screening ws WHERE ws.person_id IN (SELECT person_id FROM t)) SELECT t.[Donor], t.[Total Given], t.[Gifts], t.[Avg Gift], t.[Last Gift], t.[Days Silent], t.[Stage], ISNULL(comm.[Orders],0) AS [Orders], ISNULL(comm.[Commerce $],0) AS [Commerce $], ISNULL(evt.[Tickets],0) AS [Tickets], ISNULL(sub.[Active Sub],'No') AS [Active Sub], w.[Capacity] FROM t LEFT JOIN comm ON comm.person_id=t.person_id LEFT JOIN evt ON evt.person_id=t.person_id LEFT JOIN sub ON sub.person_id=t.person_id LEFT JOIN w ON w.person_id=t.person_id ORDER BY t.[Total Given] DESC
+→ **table**: title="Top N Donors — 360 View"
+
+**Widget 4 — text**: Strategic analysis — who's at risk (Cooling/Lapsed with high giving + high days silent), who's undertapped (low giving vs wealth capacity), who needs a call this week. Name specific people with dollar amounts. Keep to 4-5 bullet points.
+
+#### "Giving trends" / "story of giving" / "what's happening with giving"
+**Query**: SELECT FORMAT(donated_at,'yyyy-MM') AS [Month], SUM(CAST(amount AS DECIMAL(12,2))) AS [Total], COUNT(*) AS [Gifts], COUNT(DISTINCT person_id) AS [Donors] FROM serving.donation_detail WHERE donated_at >= DATEADD(YEAR,-3,GETDATE()) GROUP BY FORMAT(donated_at,'yyyy-MM') ORDER BY [Month]
+→ **area_chart**: categoryKey='Month', valueKeys=['Total'] — title="Giving Trend"
+→ **stat_grid**: Summarize: total given across period, total gifts, unique donors, avg monthly giving
+→ **text**: Analysis of trends — what months spike, seasonality, year-over-year direction, any concerning drops
+
+#### "Year-over-year" / "compare years"
+**Query**: SELECT YEAR(donated_at) AS [Year], SUM(CAST(amount AS DECIMAL(12,2))) AS [Total], COUNT(*) AS [Gifts], COUNT(DISTINCT person_id) AS [Donors] FROM serving.donation_detail GROUP BY YEAR(donated_at) ORDER BY [Year]
+→ **bar_chart**: categoryKey='Year', valueKeys=['Total','Donors']
+
+#### "Cross-channel champions" / "multi-channel supporters"
+Use multiple queries joining donor_summary + order_detail + event_detail + subscription_detail on person_id to find people active in 3+ channels → table + text analysis
+
+#### "Wealth gap" / "untapped capacity"
+**Query**: SELECT ds.display_name AS [Donor], CAST(ds.total_given AS DECIMAL(12,2)) AS [Total Given], CAST(ws.giving_capacity AS DECIMAL(12,2)) AS [Capacity], ws.capacity_label AS [Tier], CAST(ROUND(ds.total_given/NULLIF(ws.giving_capacity,0)*100,1) AS DECIMAL(5,1)) AS [% Utilized] FROM serving.donor_summary ds JOIN serving.wealth_screening ws ON ds.person_id=ws.person_id WHERE ds.display_name<>'Unknown' AND ds.total_given < ws.giving_capacity*0.1 ORDER BY ws.giving_capacity DESC
+→ **table** + **text** with action items
 
 ## CRITICAL SQL Rules
 - NEVER include person_id, donation_id, or any _id column in SELECT
@@ -317,7 +348,7 @@ export async function POST(request: Request) {
           tools,
           maxRetries: 1,
           stopWhen: stepCountIs(12),
-          temperature: 0.4,
+          temperature: 0,
           onError: ({ error }) => {
             console.error("[chat] Stream error on model", i, ":", error);
           },
