@@ -295,38 +295,42 @@ SELECT CASE WHEN (SELECT total_amt FROM tot) IS NULL OR (SELECT total_amt FROM t
     // ── COMMERCE ────────────────────────────────────────────
     {
       key: 'commerce.total_order_revenue_usd', display: 'Total Order Revenue ($)',
-      desc: 'Sum of order totals in window', type: 'aggregate', unit: 'usd', fmt: 'currency',
+      desc: 'Sum of order totals in window (excludes $0 non-commerce orders)', type: 'aggregate', unit: 'usd', fmt: 'currency',
       grain: 'order', window: 'last_30_days', deps: null,
       sql: `SELECT CAST(SUM(o.total_amount) AS DECIMAL(18,4)) AS value
 FROM serving.order_detail o
-WHERE (@start_date IS NULL OR o.order_date >= @start_date)
+WHERE o.total_amount > 0
+  AND (@start_date IS NULL OR o.order_date >= @start_date)
   AND (@end_date   IS NULL OR o.order_date < DATEADD(DAY,1,@end_date))`
     },
     {
       key: 'commerce.order_count', display: 'Order Count',
-      desc: 'Number of orders in window', type: 'aggregate', unit: 'count', fmt: 'integer',
+      desc: 'Number of commerce orders in window (excludes $0 non-commerce orders)', type: 'aggregate', unit: 'count', fmt: 'integer',
       grain: 'order', window: 'last_30_days', deps: null,
       sql: `SELECT CAST(COUNT_BIG(1) AS DECIMAL(18,4)) AS value
 FROM serving.order_detail o
-WHERE (@start_date IS NULL OR o.order_date >= @start_date)
+WHERE o.total_amount > 0
+  AND (@start_date IS NULL OR o.order_date >= @start_date)
   AND (@end_date   IS NULL OR o.order_date < DATEADD(DAY,1,@end_date))`
     },
     {
       key: 'commerce.avg_order_value_usd', display: 'Average Order Value ($)',
-      desc: 'Average order total in window', type: 'ratio', unit: 'usd', fmt: 'currency',
+      desc: 'Average order total in window (excludes $0 non-commerce orders)', type: 'ratio', unit: 'usd', fmt: 'currency',
       grain: 'order', window: 'last_30_days', deps: null,
       sql: `SELECT CAST(AVG(CAST(o.total_amount AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS value
 FROM serving.order_detail o
-WHERE (@start_date IS NULL OR o.order_date >= @start_date)
+WHERE o.total_amount > 0
+  AND (@start_date IS NULL OR o.order_date >= @start_date)
   AND (@end_date   IS NULL OR o.order_date < DATEADD(DAY,1,@end_date))`
     },
     {
       key: 'commerce.unique_buyers', display: 'Unique Buyers',
-      desc: 'Distinct people who placed an order in window', type: 'aggregate', unit: 'count', fmt: 'integer',
+      desc: 'Distinct people who placed a commerce order (total > $0) in window', type: 'aggregate', unit: 'count', fmt: 'integer',
       grain: 'person', window: 'last_12_months', deps: null,
       sql: `SELECT CAST(COUNT_BIG(DISTINCT o.person_id) AS DECIMAL(18,4)) AS value
 FROM serving.order_detail o
-WHERE (@start_date IS NULL OR o.order_date >= @start_date)
+WHERE o.total_amount > 0
+  AND (@start_date IS NULL OR o.order_date >= @start_date)
   AND (@end_date   IS NULL OR o.order_date < DATEADD(DAY,1,@end_date))`
     },
     {
