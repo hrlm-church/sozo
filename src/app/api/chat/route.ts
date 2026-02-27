@@ -9,6 +9,7 @@ import { memorySearch } from "@/lib/server/memory-search";
 import { getSessionEmail } from "@/lib/server/session";
 import { checkGuardrail } from "@/lib/server/guardrail";
 import { matchRecipe } from "@/lib/server/recipes";
+import { analyzeIntent, buildIntelContextBlock } from "@/lib/server/intent-router";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -121,11 +122,14 @@ You have two learning tools:
 - Lifecycle counts: 84K prospects, 362 active, 425 cooling, 1,091 lapsed, 3,158 lost
 
 ## Tools
-1. **query_data** — Execute read-only T-SQL. Use for ALL data questions: numbers, counts, sums, trends, rankings, profiles, comparisons. Write SQL that selects exactly the columns the user needs. Results auto-available to show_widget.
-2. **search_data** — Semantic search across all person profiles. Use for behavioral/discovery questions.
-3. **show_widget** — Display interactive visualization. Types: kpi, stat_grid, bar_chart, line_chart, area_chart, donut_chart, table, drill_down_table, funnel, text.
-4. **save_insight** — Save a specific data finding (expires in 30 days). Use for notable query results.
-5. **save_knowledge** — Save a specific permanent learning (correction, preference, pattern, fact, persona). One fact per call.
+1. **compute_metric** — Execute a certified metric from the intel catalog. PREFERRED for standard metric questions (total giving, donor count, MRR, retention rate, etc.). Produces pre-validated SQL — more reliable than manual SQL. See "Available Metrics" section below for metric keys.
+2. **query_data** — Execute read-only T-SQL. Use for complex/custom queries not covered by certified metrics: multi-table joins, person lookups, detailed breakdowns, 360 views. Results auto-available to show_widget.
+3. **search_data** — Semantic search across all person profiles. Use for behavioral/discovery questions.
+4. **show_widget** — Display interactive visualization. Types: kpi, stat_grid, bar_chart, line_chart, area_chart, donut_chart, table, drill_down_table, funnel, text.
+5. **save_insight** — Save a specific data finding (expires in 30 days). Use for notable query results.
+6. **save_knowledge** — Save a specific permanent learning (correction, preference, pattern, fact, persona). One fact per call.
+
+**Tool selection priority**: compute_metric > query_data > search_data. Use compute_metric first when the question maps to a certified metric. Fall back to query_data for custom/complex queries.
 
 ## Reasoning & Workflow
 Before answering, THINK about what the user really needs:
@@ -306,7 +310,40 @@ export async function POST(request: Request) {
       // Non-critical
     }
 
-    // 4. Match recipes — inject at the END of system prompt for maximum attention
+    // 3b. Inject intelligence insights (from nightly jobs: anomalies, risks, opportunities)
+    try {
+      const { executeSql: execSql } = await import("@/lib/server/sql-client");
+      const intelInsights = await execSql(`
+        SELECT TOP (5) title, summary, insight_type, severity, as_of_date
+        FROM intel.insight
+        WHERE is_active = 1 AND status = 'open'
+        ORDER BY severity DESC, created_at DESC
+      `, 10000);
+      if (intelInsights.ok && intelInsights.rows.length > 0) {
+        const lines = intelInsights.rows.map((r: Record<string, unknown>) =>
+          `- [${r.insight_type}] ${r.title}: ${r.summary}`
+        );
+        systemPrompt += `\n\n## Intelligence Alerts (proactively surface these when relevant)\n${lines.join("\n")}`;
+      }
+    } catch {
+      // Non-critical
+    }
+
+    // 4. Inject intelligence layer context (metric catalog, policies, matched metrics)
+    try {
+      const intentCtx = await analyzeIntent(lastUserText);
+      const intelBlock = buildIntelContextBlock(intentCtx);
+      if (intelBlock) {
+        systemPrompt += `\n\n${intelBlock}`;
+      }
+      if (intentCtx.isLikelyMetricQuery) {
+        console.log("[chat] Metric match:", intentCtx.matchedMetrics.map((m) => m.metric_key).join(", "));
+      }
+    } catch {
+      // Non-critical — degrade gracefully
+    }
+
+    // 5. Match recipes — inject at the END of system prompt for maximum attention
     const recipeMatch = matchRecipe(lastUserText);
     if (recipeMatch) {
       console.log("[chat] Recipe matched:", recipeMatch.recipe.id, "for:", lastUserText.slice(0, 60));

@@ -6,6 +6,8 @@ import { hybridSearch } from "@/lib/server/search-client";
 
 import { saveInsight } from "@/lib/server/insights";
 import { saveKnowledge } from "@/lib/server/memory";
+import { compileSQP, CompileError } from "@/lib/server/sqp-compiler";
+import type { TimePreset, Filter, FilterOp } from "@/lib/server/sqp-types";
 import type { Widget, WidgetType, WidgetConfig } from "@/types/widget";
 
 /**
@@ -274,6 +276,146 @@ export function getChatTools(ownerEmail?: string) {
         if (!ownerEmail) return { ok: false, error: "No user session" };
         const result = await saveKnowledge(ownerEmail, category, content, confidence, supersedes);
         return result;
+      },
+    }),
+
+    compute_metric: tool({
+      description:
+        "Execute a certified metric from the intel catalog. " +
+        "Use this when the user asks about a known metric (giving totals, donor counts, MRR, retention rate, etc.). " +
+        "This produces validated, pre-tested SQL — more reliable than writing SQL manually. " +
+        "Results auto-available to show_widget. Check the 'Available Metrics' in your prompt for metric keys.",
+      inputSchema: z.object({
+        metrics: z
+          .array(z.string())
+          .min(1)
+          .max(5)
+          .describe("Metric keys from the catalog, e.g. ['giving.total_donations_usd']"),
+        time_window: z
+          .enum([
+            "today", "yesterday", "last_7_days", "last_30_days", "last_90_days",
+            "last_12_months", "ytd", "last_year", "all_time", "as_of", "custom",
+          ])
+          .optional()
+          .default("last_12_months")
+          .describe("Time window preset"),
+        start_date: z
+          .string()
+          .optional()
+          .describe("Start date (YYYY-MM-DD) for custom time window"),
+        end_date: z
+          .string()
+          .optional()
+          .describe("End date (YYYY-MM-DD) for custom time window"),
+        dimensions: z
+          .array(z.string())
+          .optional()
+          .describe("Dimension keys to group by, e.g. ['time.month', 'giving.fund']"),
+        filters: z
+          .array(
+            z.object({
+              dimension: z.string(),
+              op: z.enum(["=", "!=", "in", "not_in", ">", ">=", "<", "<=", "between", "like"]),
+              value: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
+              values: z.array(z.union([z.string(), z.number()])).optional(),
+            }),
+          )
+          .optional()
+          .describe("Optional filters"),
+        sort_by: z
+          .string()
+          .optional()
+          .describe("Sort by dimension key or 'value'"),
+        sort_direction: z
+          .enum(["asc", "desc"])
+          .optional()
+          .default("desc"),
+        limit: z
+          .number()
+          .optional()
+          .default(100)
+          .describe("Max rows (1-500)"),
+      }),
+      execute: async ({
+        metrics: metricKeys,
+        time_window,
+        start_date,
+        end_date,
+        dimensions,
+        filters,
+        sort_by,
+        sort_direction,
+        limit,
+      }) => {
+        try {
+          const compiled = await compileSQP({
+            intent: dimensions && dimensions.length > 0 ? "breakdown" : "metric_query",
+            metrics: metricKeys,
+            timeWindow: {
+              preset: (time_window ?? "last_12_months") as TimePreset,
+              startDate: start_date,
+              endDate: end_date,
+            },
+            dimensions,
+            filters: filters?.map((f) => ({
+              dimension: f.dimension,
+              op: f.op as FilterOp,
+              value: f.value ?? null,
+              values: f.values,
+            })),
+            sort: sort_by ? { by: sort_by, direction: sort_direction ?? "desc" } : undefined,
+            limit: Math.min(limit ?? 100, 500),
+          });
+
+          console.log("[compute_metric]", metricKeys.join("+"), "→", compiled.sql.slice(0, 120));
+
+          // Execute the compiled SQL
+          const result = await executeSql(compiled.sql, QUERY_TIMEOUT_MS);
+          if (!result.ok) {
+            return {
+              ok: false as const,
+              error: result.reason,
+              data: [] as Record<string, unknown>[],
+              sql: compiled.sql,
+              explanation: compiled.explanation,
+            };
+          }
+
+          // Store for show_widget
+          lastQueryRows = result.rows;
+          lastQuerySql = compiled.sql;
+          queryResultMap.set(sqlKey(compiled.sql), result.rows);
+
+          const PREVIEW_LIMIT = 15;
+          const preview = result.rows.length > PREVIEW_LIMIT
+            ? result.rows.slice(0, PREVIEW_LIMIT)
+            : result.rows;
+
+          return {
+            ok: true as const,
+            rowCount: result.rows.length,
+            data: preview,
+            sql: compiled.sql,
+            explanation: compiled.explanation,
+            metricsUsed: compiled.metricsUsed,
+            dimensionsUsed: compiled.dimensionsUsed,
+            ...(result.rows.length > PREVIEW_LIMIT && {
+              note: `Showing ${PREVIEW_LIMIT} of ${result.rows.length} rows. Full data available in widget.`,
+            }),
+          };
+        } catch (err) {
+          const msg = err instanceof CompileError
+            ? `${err.code}: ${err.message}`
+            : err instanceof Error
+              ? err.message
+              : String(err);
+          console.error("[compute_metric] Error:", msg);
+          return {
+            ok: false as const,
+            error: msg,
+            data: [] as Record<string, unknown>[],
+          };
+        }
       },
     }),
   };

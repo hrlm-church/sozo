@@ -64,6 +64,31 @@ const ALLOWED_TABLES = new Set([
   "gold.monthly_trends",
   "gold.product_summary",
   "gold.subscription_health",
+  // Intel layer (intelligence/analytics brain)
+  "intel.metric_definition",
+  "intel.metric_synonym",
+  "intel.dimension_definition",
+  "intel.metric_dimension_allowlist",
+  "intel.metric_snapshot",
+  "intel.insight",
+  "intel.insight_entity_link",
+  "intel.query_plan",
+  "intel.query_plan_example_utterance",
+  "intel.semantic_policy",
+  "intel.user_preference",
+  "intel.person_score",
+  // Intel views (semantic analytics)
+  "intel.vw_donor_health",
+  "intel.vw_person_value",
+  "intel.vw_capacity_gap",
+  "intel.vw_donor_retention_funnel",
+  "intel.vw_event_giving_lift",
+  "intel.vw_subscription_donor_conversion",
+  "intel.vw_cross_channel_engagement",
+  "intel.vw_giving_pace",
+  "intel.vw_concentration_risk",
+  "intel.vw_lybunt",
+  "intel.vw_sybunt",
 ]);
 
 const BLOCKED_PATTERNS = [
