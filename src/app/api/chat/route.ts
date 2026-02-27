@@ -10,6 +10,7 @@ import { getSessionEmail } from "@/lib/server/session";
 import { checkGuardrail } from "@/lib/server/guardrail";
 import { matchRecipe } from "@/lib/server/recipes";
 import { analyzeIntent, buildIntelContextBlock } from "@/lib/server/intent-router";
+import { checkRateLimit, RATE_LIMITS, rateLimitHeaders } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -202,6 +203,22 @@ ${SCHEMA_CONTEXT}
 
 export async function POST(request: Request) {
   try {
+    // Rate limit check (per user or IP)
+    const ownerEmailForRL = await getSessionEmail();
+    if (!ownerEmailForRL) {
+      return new Response(
+        JSON.stringify({ error: "Authentication required" }),
+        { status: 401, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    const rl = checkRateLimit(`chat:${ownerEmailForRL}`, RATE_LIMITS.chat.limit, RATE_LIMITS.chat.windowMs);
+    if (!rl.allowed) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Please wait before sending another message." }),
+        { status: 429, headers: { "Content-Type": "application/json", ...rateLimitHeaders(rl, RATE_LIMITS.chat.limit) } },
+      );
+    }
+
     const body = await request.json();
     const uiMessages = body.messages as UIMessage[] | undefined;
 

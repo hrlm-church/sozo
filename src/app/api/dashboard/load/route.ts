@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { executeSql } from "@/lib/server/sql-client";
+import { executeSqlSafe } from "@/lib/server/sql-client";
 import { getSessionEmail } from "@/lib/server/session";
 import type { Widget, WidgetLayout, WidgetConfig } from "@/types/widget";
 
@@ -7,41 +7,53 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const ownerEmail = (await getSessionEmail()) ?? "anonymous@sozo.local";
+    const ownerEmail = await getSessionEmail();
+    if (!ownerEmail) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
     // List dashboards for current user
     if (!id) {
-      const result = await executeSql(`
-        SELECT id, name, owner_email, created_at, updated_at
-        FROM dashboard.saved_dashboard
-        WHERE owner_email = N'${esc(ownerEmail)}'
-        ORDER BY updated_at DESC
-      `);
+      const result = await executeSqlSafe(
+        `SELECT id, name, owner_email, created_at, updated_at
+         FROM dashboard.saved_dashboard
+         WHERE owner_email = @email
+         ORDER BY updated_at DESC`,
+        { email: ownerEmail },
+      );
       if (!result.ok) {
         return NextResponse.json({ error: result.reason }, { status: 500 });
       }
       return NextResponse.json({ dashboards: result.rows });
     }
 
+    if (id.length > 100) {
+      return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    }
+
     // Load specific dashboard (scoped to current user)
-    const dashResult = await executeSql(`
-      SELECT id, name, owner_email, created_at, updated_at
-      FROM dashboard.saved_dashboard
-      WHERE id = '${esc(id)}' AND owner_email = N'${esc(ownerEmail)}'
-    `);
+    const dashResult = await executeSqlSafe(
+      `SELECT id, name, owner_email, created_at, updated_at
+       FROM dashboard.saved_dashboard
+       WHERE id = @id AND owner_email = @email`,
+      { id, email: ownerEmail },
+    );
     if (!dashResult.ok || dashResult.rows.length === 0) {
       return NextResponse.json({ error: "Dashboard not found" }, { status: 404 });
     }
 
     const dashboard = dashResult.rows[0];
 
-    const widgetResult = await executeSql(`
-      SELECT id, type, title, sql_query, config_json, data_json, layout_x, layout_y, layout_w, layout_h
-      FROM dashboard.widget
-      WHERE dashboard_id = '${esc(id)}'
-    `);
+    const widgetResult = await executeSqlSafe(
+      `SELECT id, type, title, sql_query, config_json, data_json,
+              layout_x, layout_y, layout_w, layout_h
+       FROM dashboard.widget
+       WHERE dashboard_id = @id`,
+      { id },
+    );
 
     const widgets: Widget[] = [];
     const layouts: WidgetLayout[] = [];
@@ -78,10 +90,6 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
-}
-
-function esc(val: string): string {
-  return val.replace(/'/g, "''");
 }
 
 function safeJsonParse<T>(val: unknown, fallback: T): T {

@@ -2,11 +2,20 @@
 
 import type { Widget } from "@/types/widget";
 
+/** Escape HTML entities to prevent XSS before applying markdown transforms */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function TextWidget({ widget }: { widget: Widget }) {
   const markdown = widget.config.markdown ?? "";
 
-  // Simple markdown → HTML (bold, italic, headers, lists, line breaks)
-  const html = markdown
+  // Escape first, then apply markdown → HTML (only our transforms produce real HTML)
+  const html = escapeHtml(markdown)
     .replace(/^### (.+)$/gm, '<h4 style="margin:8px 0 4px;font-size:0.95rem;font-weight:600">$1</h4>')
     .replace(/^## (.+)$/gm, '<h3 style="margin:8px 0 4px;font-size:1.05rem;font-weight:650">$1</h3>')
     .replace(/^# (.+)$/gm, '<h2 style="margin:8px 0 4px;font-size:1.15rem;font-weight:700">$1</h2>')

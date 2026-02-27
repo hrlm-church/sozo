@@ -49,8 +49,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       // Always allow auth routes and health check
       if (isAuthApi || isHealthApi) return true;
-      // TODO: Remove before production — allows unauthenticated chat API access for testing
-      if (nextUrl.pathname === "/api/chat") return true;
 
       // Redirect logged-in users away from login page
       if (isLoginPage) {

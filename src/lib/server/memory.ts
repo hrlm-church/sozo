@@ -1,11 +1,7 @@
 /**
  * Knowledge base and conversation summary CRUD for the continuous learning system.
  */
-import { executeSql } from "@/lib/server/sql-client";
-
-function esc(val: string): string {
-  return val.replace(/'/g, "''");
-}
+import { executeSqlSafe } from "@/lib/server/sql-client";
 
 // ─── Knowledge CRUD ──────────────────────────────────────────────────
 
@@ -24,21 +20,22 @@ export async function getActiveKnowledge(
   ownerEmail: string,
   limit = 30,
 ): Promise<KnowledgeItem[]> {
-  const result = await executeSql(`
-    SELECT TOP (${limit}) id, category, content, confidence, created_at
-    FROM sozo.knowledge
-    WHERE owner_email = N'${esc(ownerEmail)}' AND is_active = 1
-    ORDER BY
-      CASE category
-        WHEN 'correction' THEN 1
-        WHEN 'preference' THEN 2
-        WHEN 'persona' THEN 3
-        WHEN 'fact' THEN 4
-        WHEN 'pattern' THEN 5
-      END,
-      confidence DESC,
-      created_at DESC
-  `);
+  const result = await executeSqlSafe(
+    `SELECT TOP (@limit) id, category, content, confidence, created_at
+     FROM sozo.knowledge
+     WHERE owner_email = @email AND is_active = 1
+     ORDER BY
+       CASE category
+         WHEN 'correction' THEN 1
+         WHEN 'preference' THEN 2
+         WHEN 'persona' THEN 3
+         WHEN 'fact' THEN 4
+         WHEN 'pattern' THEN 5
+       END,
+       confidence DESC,
+       created_at DESC`,
+    { email: ownerEmail, limit },
+  );
   if (!result.ok) return [];
   return result.rows as unknown as KnowledgeItem[];
 }
@@ -58,25 +55,27 @@ export async function saveKnowledge(
 
   // Deactivate superseded item if specified
   if (supersedesId) {
-    await executeSql(`
-      UPDATE sozo.knowledge
-      SET is_active = 0, updated_at = SYSUTCDATETIME()
-      WHERE id = '${esc(supersedesId)}' AND owner_email = N'${esc(ownerEmail)}'
-    `);
+    await executeSqlSafe(
+      `UPDATE sozo.knowledge
+       SET is_active = 0, updated_at = SYSUTCDATETIME()
+       WHERE id = @supersedesId AND owner_email = @email`,
+      { supersedesId, email: ownerEmail },
+    );
   }
 
-  const result = await executeSql(`
-    INSERT INTO sozo.knowledge (id, owner_email, category, content, source_conv_id, confidence, supersedes_id)
-    VALUES (
-      '${esc(id)}',
-      N'${esc(ownerEmail)}',
-      N'${esc(category)}',
-      N'${esc(content.slice(0, 2000))}',
-      ${sourceConvId ? `'${esc(sourceConvId)}'` : "NULL"},
-      ${Math.max(0, Math.min(1, confidence))},
-      ${supersedesId ? `'${esc(supersedesId)}'` : "NULL"}
-    )
-  `);
+  const result = await executeSqlSafe(
+    `INSERT INTO sozo.knowledge (id, owner_email, category, content, source_conv_id, confidence, supersedes_id)
+     VALUES (@id, @email, @category, @content, @sourceConvId, @confidence, @supersedesId)`,
+    {
+      id,
+      email: ownerEmail,
+      category,
+      content: content.slice(0, 2000),
+      sourceConvId: sourceConvId ?? null,
+      confidence: Math.max(0, Math.min(1, confidence)),
+      supersedesId: supersedesId ?? null,
+    },
+  );
 
   if (!result.ok) return { ok: false, error: result.reason };
   return { ok: true, id };
@@ -99,32 +98,33 @@ export async function saveConversationSummary(
   const topicsJson = JSON.stringify(topics);
   const patternsJson = JSON.stringify(queryPatterns);
 
-  const result = await executeSql(`
-    IF EXISTS (SELECT 1 FROM sozo.conversation_summary WHERE id = '${esc(conversationId)}')
-    BEGIN
-      UPDATE sozo.conversation_summary
-      SET summary_text = N'${esc(summaryText)}',
-          title = N'${esc(title.slice(0, 256))}',
-          topics = N'${esc(topicsJson)}',
-          query_patterns = N'${esc(patternsJson)}',
-          message_count = ${messageCount},
-          updated_at = SYSUTCDATETIME()
-      WHERE id = '${esc(conversationId)}'
-    END
-    ELSE
-    BEGIN
-      INSERT INTO sozo.conversation_summary (id, owner_email, title, summary_text, topics, query_patterns, message_count)
-      VALUES (
-        '${esc(conversationId)}',
-        N'${esc(ownerEmail)}',
-        N'${esc(title.slice(0, 256))}',
-        N'${esc(summaryText)}',
-        N'${esc(topicsJson)}',
-        N'${esc(patternsJson)}',
-        ${messageCount}
-      )
-    END
-  `);
+  const result = await executeSqlSafe(
+    `IF EXISTS (SELECT 1 FROM sozo.conversation_summary WHERE id = @id)
+     BEGIN
+       UPDATE sozo.conversation_summary
+       SET summary_text = @summary,
+           title = @title,
+           topics = @topics,
+           query_patterns = @patterns,
+           message_count = @msgCount,
+           updated_at = SYSUTCDATETIME()
+       WHERE id = @id
+     END
+     ELSE
+     BEGIN
+       INSERT INTO sozo.conversation_summary (id, owner_email, title, summary_text, topics, query_patterns, message_count)
+       VALUES (@id, @email, @title, @summary, @topics, @patterns, @msgCount)
+     END`,
+    {
+      id: conversationId,
+      email: ownerEmail,
+      title: title.slice(0, 256),
+      summary: summaryText,
+      topics: topicsJson,
+      patterns: patternsJson,
+      msgCount: messageCount,
+    },
+  );
 
   if (!result.ok) return { ok: false, error: result.reason };
   return { ok: true };

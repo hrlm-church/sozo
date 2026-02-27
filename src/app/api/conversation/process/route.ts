@@ -7,7 +7,7 @@
  * Called fire-and-forget by the client after conversation save.
  */
 import { NextResponse } from "next/server";
-import { executeSql } from "@/lib/server/sql-client";
+import { executeSqlSafe } from "@/lib/server/sql-client";
 import { getSessionEmail } from "@/lib/server/session";
 import {
   extractConversationMemory,
@@ -16,40 +16,43 @@ import {
 import { saveConversationSummary, saveKnowledge } from "@/lib/server/memory";
 import { getQueryEmbedding } from "@/lib/server/search-client";
 import { uploadMemoryDocument } from "@/lib/server/memory-search";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30; // Allow up to 30s for this background-ish work
+export const maxDuration = 30;
 
-function esc(val: string): string {
-  return val.replace(/'/g, "''");
-}
-
-interface ProcessRequest {
-  conversationId: string;
-}
+const ProcessSchema = z.object({
+  conversationId: z.string().min(1).max(100),
+});
 
 export async function POST(request: Request) {
   try {
-    const ownerEmail = (await getSessionEmail()) ?? "anonymous@sozo.local";
-    const body = (await request.json()) as ProcessRequest;
-    const { conversationId } = body;
+    const ownerEmail = await getSessionEmail();
+    if (!ownerEmail) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
 
-    if (!conversationId) {
+    const body = await request.json();
+    const parsed = ProcessSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
         { error: "conversationId required" },
         { status: 400 },
       );
     }
 
+    const { conversationId } = parsed.data;
+
     // Check if already processed recently (debounce)
-    const existing = await executeSql(`
-      SELECT updated_at FROM sozo.conversation_summary
-      WHERE id = '${esc(conversationId)}'
-    `);
-    const conv = await executeSql(`
-      SELECT updated_at, title FROM sozo.conversation
-      WHERE id = '${esc(conversationId)}' AND owner_email = N'${esc(ownerEmail)}'
-    `);
+    const existing = await executeSqlSafe(
+      `SELECT updated_at FROM sozo.conversation_summary WHERE id = @id`,
+      { id: conversationId },
+    );
+    const conv = await executeSqlSafe(
+      `SELECT updated_at, title FROM sozo.conversation
+       WHERE id = @id AND owner_email = @email`,
+      { id: conversationId, email: ownerEmail },
+    );
 
     if (!conv.ok || conv.rows.length === 0) {
       return NextResponse.json(
@@ -74,15 +77,15 @@ export async function POST(request: Request) {
     const convTitle = (conv.rows[0].title as string) || "Untitled";
 
     // 1. Load conversation messages
-    const msgResult = await executeSql(`
-      SELECT role, content_json
-      FROM sozo.conversation_message
-      WHERE conversation_id = '${esc(conversationId)}'
-      ORDER BY created_at ASC
-    `);
+    const msgResult = await executeSqlSafe(
+      `SELECT role, content_json
+       FROM sozo.conversation_message
+       WHERE conversation_id = @id
+       ORDER BY created_at ASC`,
+      { id: conversationId },
+    );
 
     if (!msgResult.ok || msgResult.rows.length < 3) {
-      // Need at least greeting + user message + assistant response
       return NextResponse.json({ ok: true, skipped: true, reason: "too few messages" });
     }
 

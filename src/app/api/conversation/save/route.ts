@@ -1,68 +1,80 @@
 import { NextResponse } from "next/server";
-import { executeSql } from "@/lib/server/sql-client";
+import { withTransaction } from "@/lib/server/sql-client";
 import { getSessionEmail } from "@/lib/server/session";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
-interface SaveRequest {
-  conversationId: string;
-  title?: string;
-  messages: Array<{
-    id: string;
-    role: string;
-    content: string; // JSON-serialized UIMessage parts
-  }>;
-}
-
-function esc(val: string): string {
-  return val.replace(/'/g, "''");
-}
+const SaveSchema = z.object({
+  conversationId: z.string().min(1).max(100),
+  title: z.string().max(256).optional(),
+  messages: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        role: z.string().min(1).max(50),
+        content: z.string(),
+      }),
+    )
+    .min(1)
+    .max(500),
+});
 
 export async function POST(request: Request) {
   try {
-    const ownerEmail = (await getSessionEmail()) ?? "anonymous@sozo.local";
-    const body = (await request.json()) as SaveRequest;
-    const { conversationId, title, messages } = body;
-
-    if (!conversationId || !messages?.length) {
-      return NextResponse.json({ error: "conversationId and messages required" }, { status: 400 });
+    const ownerEmail = await getSessionEmail();
+    if (!ownerEmail) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const safeTitle = esc(title || messages.find(m => m.role === "user")?.content?.slice(0, 100) || "New Chat");
-
-    // Upsert conversation
-    await executeSql(`
-      IF EXISTS (SELECT 1 FROM sozo.conversation WHERE id = '${esc(conversationId)}')
-      BEGIN
-        UPDATE sozo.conversation
-        SET title = N'${safeTitle}', message_count = ${messages.length}, updated_at = SYSUTCDATETIME()
-        WHERE id = '${esc(conversationId)}'
-      END
-      ELSE
-      BEGIN
-        INSERT INTO sozo.conversation (id, title, owner_email, message_count)
-        VALUES ('${esc(conversationId)}', N'${safeTitle}', N'${esc(ownerEmail)}', ${messages.length})
-      END
-    `);
-
-    // Delete existing messages and re-insert (simpler than diff)
-    await executeSql(
-      `DELETE FROM sozo.conversation_message WHERE conversation_id = '${esc(conversationId)}'`,
-    );
-
-    // Insert messages in batches of 5 (avoid huge queries on low DTU)
-    for (let i = 0; i < messages.length; i += 5) {
-      const batch = messages.slice(i, i + 5);
-      const values = batch
-        .map(
-          (m) =>
-            `('${esc(m.id)}', '${esc(conversationId)}', '${esc(m.role)}', N'${esc(m.content)}')`,
-        )
-        .join(",\n");
-      await executeSql(
-        `INSERT INTO sozo.conversation_message (id, conversation_id, role, content_json) VALUES ${values}`,
+    const body = await request.json();
+    const parsed = SaveSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid request", details: parsed.error.issues },
+        { status: 400 },
       );
     }
+
+    const { conversationId, title, messages } = parsed.data;
+    const safeTitle = title || messages.find((m) => m.role === "user")?.content?.slice(0, 100) || "New Chat";
+
+    await withTransaction(async (exec) => {
+      // Upsert conversation
+      await exec(
+        `IF EXISTS (SELECT 1 FROM sozo.conversation WHERE id = @id)
+         BEGIN
+           UPDATE sozo.conversation
+           SET title = @title, message_count = @msgCount, updated_at = SYSUTCDATETIME()
+           WHERE id = @id
+         END
+         ELSE
+         BEGIN
+           INSERT INTO sozo.conversation (id, title, owner_email, message_count)
+           VALUES (@id, @title, @email, @msgCount)
+         END`,
+        { id: conversationId, title: safeTitle, email: ownerEmail, msgCount: messages.length },
+      );
+
+      // Delete existing messages
+      await exec(
+        `DELETE FROM sozo.conversation_message WHERE conversation_id = @convId`,
+        { convId: conversationId },
+      );
+
+      // Insert messages in batches of 5
+      for (let i = 0; i < messages.length; i += 5) {
+        const batch = messages.slice(i, i + 5);
+        for (let j = 0; j < batch.length; j++) {
+          const m = batch[j];
+          await exec(
+            `INSERT INTO sozo.conversation_message (id, conversation_id, role, content_json)
+             VALUES (@mid, @convId, @role, @content)`,
+            { mid: m.id, convId: conversationId, role: m.role, content: m.content },
+          );
+        }
+      }
+    });
 
     return NextResponse.json({ id: conversationId, saved: true });
   } catch (error) {

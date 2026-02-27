@@ -1,28 +1,29 @@
 import { NextResponse } from "next/server";
-import { executeSql } from "@/lib/server/sql-client";
+import { executeSqlSafe } from "@/lib/server/sql-client";
 import { getSessionEmail } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
-function esc(val: string): string {
-  return val.replace(/'/g, "''");
-}
-
 export async function DELETE(request: Request) {
   try {
-    const ownerEmail = (await getSessionEmail()) ?? "anonymous@sozo.local";
+    const ownerEmail = await getSessionEmail();
+    if (!ownerEmail) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
-    if (!id) {
-      return NextResponse.json({ error: "id parameter required" }, { status: 400 });
+    if (!id || id.length > 100) {
+      return NextResponse.json({ error: "Valid id parameter required" }, { status: 400 });
     }
 
     // Delete (CASCADE will remove messages too)
-    await executeSql(`
-      DELETE FROM sozo.conversation
-      WHERE id = '${esc(id)}' AND owner_email = N'${esc(ownerEmail)}'
-    `);
+    await executeSqlSafe(
+      `DELETE FROM sozo.conversation
+       WHERE id = @id AND owner_email = @email`,
+      { id, email: ownerEmail },
+    );
 
     return NextResponse.json({ deleted: true });
   } catch (error) {
