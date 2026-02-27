@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { executeSqlSafe } from "@/lib/server/sql-client";
 import { getSessionEmail } from "@/lib/server/session";
+import { withAuditLog } from "@/lib/server/audit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withAuditLog("/api/conversation/load", async function GET(request: Request) {
   try {
     const ownerEmail = await getSessionEmail();
     if (!ownerEmail) {
@@ -54,4 +55,4 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
-}
+});

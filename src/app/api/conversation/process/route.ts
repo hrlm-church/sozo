@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { executeSqlSafe } from "@/lib/server/sql-client";
 import { getSessionEmail } from "@/lib/server/session";
+import { withAuditLog } from "@/lib/server/audit";
 import {
   extractConversationMemory,
   buildTranscript,
@@ -25,7 +26,7 @@ const ProcessSchema = z.object({
   conversationId: z.string().min(1).max(100),
 });
 
-export async function POST(request: Request) {
+export const POST = withAuditLog("/api/conversation/process", async function POST(request: Request) {
   try {
     const ownerEmail = await getSessionEmail();
     if (!ownerEmail) {
@@ -180,4 +181,4 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
-}
+});

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { executeSqlSafe } from "@/lib/server/sql-client";
 import { getSessionEmail } from "@/lib/server/session";
+import { withAuditLog } from "@/lib/server/audit";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ const InsightSchema = z.object({
 });
 
 /** Save a new insight */
-export async function POST(request: Request) {
+export const POST = withAuditLog("/api/insights", async function POST(request: Request) {
   try {
     const ownerEmail = await getSessionEmail();
     if (!ownerEmail) {
@@ -53,10 +54,10 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
-}
+});
 
 /** Get recent non-expired insights for the current user */
-export async function GET() {
+export const GET = withAuditLog("/api/insights", async function GET() {
   try {
     const ownerEmail = await getSessionEmail();
     if (!ownerEmail) {
@@ -78,4 +79,4 @@ export async function GET() {
       { status: 500 },
     );
   }
-}
+});

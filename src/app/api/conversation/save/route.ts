@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withTransaction } from "@/lib/server/sql-client";
 import { getSessionEmail } from "@/lib/server/session";
+import { withAuditLog } from "@/lib/server/audit";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ const SaveSchema = z.object({
     .max(500),
 });
 
-export async function POST(request: Request) {
+export const POST = withAuditLog("/api/conversation/save", async function POST(request: Request) {
   try {
     const ownerEmail = await getSessionEmail();
     if (!ownerEmail) {
@@ -83,4 +84,4 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
-}
+});

@@ -18,12 +18,21 @@ vi.mock("@/lib/server/sql-client", () => ({
   withTransaction: (...args: unknown[]) => mockWithTransaction(...args),
 }));
 
+// Mock audit to pass-through (no SQL writes in tests)
+vi.mock("@/lib/server/audit", () => ({
+  withAuditLog: (_path: string, handler: Function) => handler,
+}));
+
 function makeRequest(body: unknown): Request {
   return new Request("http://localhost:3000/api/test", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+function makeGetRequest(): Request {
+  return new Request("http://localhost:3000/api/test", { method: "GET" });
 }
 
 // ── Conversation Save ───────────────────────────────────────────────
@@ -91,13 +100,13 @@ describe("GET /api/conversation/list", () => {
   it("returns 401 when not authenticated", async () => {
     mockSessionEmail = null;
     const { GET } = await import("./conversation/list/route");
-    const res = await GET();
+    const res = await GET(makeGetRequest());
     expect(res.status).toBe(401);
   });
 
   it("returns conversations on success", async () => {
     const { GET } = await import("./conversation/list/route");
-    const res = await GET();
+    const res = await GET(makeGetRequest());
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.conversations).toHaveLength(1);
@@ -105,7 +114,7 @@ describe("GET /api/conversation/list", () => {
 
   it("passes email as parameter (not interpolated)", async () => {
     const { GET } = await import("./conversation/list/route");
-    await GET();
+    await GET(makeGetRequest());
     expect(mockExecuteSqlSafe).toHaveBeenCalledWith(
       expect.stringContaining("@email"),
       expect.objectContaining({ email: "test@example.com" }),
@@ -205,13 +214,13 @@ describe("GET /api/insights", () => {
   it("returns 401 when not authenticated", async () => {
     mockSessionEmail = null;
     const { GET } = await import("./insights/route");
-    const res = await GET();
+    const res = await GET(makeGetRequest());
     expect(res.status).toBe(401);
   });
 
   it("returns insights on success", async () => {
     const { GET } = await import("./insights/route");
-    const res = await GET();
+    const res = await GET(makeGetRequest());
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.insights).toHaveLength(1);

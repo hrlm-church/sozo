@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { executeSqlSafe } from "@/lib/server/sql-client";
 import { getSessionEmail } from "@/lib/server/session";
+import { withAuditLog } from "@/lib/server/audit";
 import type { Widget, WidgetLayout, WidgetConfig } from "@/types/widget";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withAuditLog("/api/dashboard/load", async function GET(request: Request) {
   try {
     const ownerEmail = await getSessionEmail();
     if (!ownerEmail) {
@@ -90,7 +91,7 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
-}
+});
 
 function safeJsonParse<T>(val: unknown, fallback: T): T {
   if (!val) return fallback;
