@@ -11,6 +11,8 @@ import { checkGuardrail } from "@/lib/server/guardrail";
 import { matchRecipe } from "@/lib/server/recipes";
 import { analyzeIntent, buildIntelContextBlock } from "@/lib/server/intent-router";
 import { checkRateLimit, RATE_LIMITS, rateLimitHeaders } from "@/lib/server/rate-limit";
+import { createLogger, generateRequestId } from "@/lib/server/logger";
+import { trackRequest, trackMetric, trackException } from "@/lib/server/telemetry";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -202,17 +204,25 @@ ${SCHEMA_CONTEXT}
 `;
 
 export async function POST(request: Request) {
+  const requestId = generateRequestId();
+  const startTime = Date.now();
+  const log = createLogger({ requestId });
+
   try {
     // Rate limit check (per user or IP)
     const ownerEmailForRL = await getSessionEmail();
     if (!ownerEmailForRL) {
+      log.warn("Unauthenticated chat request", { path: "/api/chat" });
       return new Response(
         JSON.stringify({ error: "Authentication required" }),
         { status: 401, headers: { "Content-Type": "application/json" } },
       );
     }
+    log.info("Chat request started", { userId: ownerEmailForRL, path: "/api/chat" });
+
     const rl = checkRateLimit(`chat:${ownerEmailForRL}`, RATE_LIMITS.chat.limit, RATE_LIMITS.chat.windowMs);
     if (!rl.allowed) {
+      log.warn("Rate limit exceeded", { userId: ownerEmailForRL, remaining: rl.remaining });
       return new Response(
         JSON.stringify({ error: "Rate limit exceeded. Please wait before sending another message." }),
         { status: 429, headers: { "Content-Type": "application/json", ...rateLimitHeaders(rl, RATE_LIMITS.chat.limit) } },
@@ -360,7 +370,7 @@ export async function POST(request: Request) {
     // 5. Match recipes — inject at the END of system prompt for maximum attention
     const recipeMatch = matchRecipe(lastUserText);
     if (recipeMatch) {
-      console.log("[chat] Recipe matched:", recipeMatch.recipe.id, "for:", lastUserText.slice(0, 60));
+      log.info("Recipe matched", { recipe: recipeMatch.recipe.id, query: lastUserText.slice(0, 60) });
       systemPrompt += `\n\n${recipeMatch.instruction}`;
     }
 
@@ -368,7 +378,7 @@ export async function POST(request: Request) {
     for (let i = 0; i < models.length; i++) {
       const model = models[i];
       try {
-        console.log("[chat] Trying model", i, "messages:", modelMessages.length, "user:", ownerEmail);
+        log.info("Trying model", { modelIndex: i, messageCount: modelMessages.length, userId: ownerEmail });
 
         const result = streamText({
           model,
@@ -380,17 +390,36 @@ export async function POST(request: Request) {
           temperature: 0,
           seed: 42,
           onError: ({ error }) => {
-            console.error("[chat] Stream error on model", i, ":", error);
+            log.error("Stream error", { modelIndex: i, error: String(error) });
           },
           onFinish: ({ text, finishReason, usage }) => {
-            console.log("[chat] Finished model", i, ":", { finishReason, usage, textLen: text?.length });
+            const durationMs = Date.now() - startTime;
+            log.info("Chat completed", {
+              modelIndex: i,
+              finishReason,
+              inputTokens: usage?.inputTokens,
+              outputTokens: usage?.outputTokens,
+              textLen: text?.length,
+              durationMs,
+            });
+            trackRequest({
+              name: "POST /api/chat",
+              url: "/api/chat",
+              duration: durationMs,
+              statusCode: 200,
+              success: true,
+              requestId,
+              userId: ownerEmail,
+            });
+            trackMetric("chat_response_time_ms", durationMs);
+            if (usage?.outputTokens) trackMetric("chat_output_tokens", usage.outputTokens);
           },
         });
 
         return result.toUIMessageStreamResponse();
       } catch (modelError) {
         const msg = modelError instanceof Error ? modelError.message : String(modelError);
-        console.warn(`[chat] Model ${i} failed: ${msg}`);
+        log.warn("Model failed, trying next", { modelIndex: i, error: msg });
         if (i === models.length - 1) throw modelError; // Last model — rethrow
         // Otherwise try next model
       }
@@ -399,7 +428,20 @@ export async function POST(request: Request) {
     // Should never reach here, but just in case
     throw new Error("No AI model available");
   } catch (error) {
-    console.error("[chat] Route error:", error);
+    const durationMs = Date.now() - startTime;
+    log.error("Chat route error", {
+      error: error instanceof Error ? error.message : String(error),
+      durationMs,
+    });
+    if (error instanceof Error) trackException(error, { requestId });
+    trackRequest({
+      name: "POST /api/chat",
+      url: "/api/chat",
+      duration: durationMs,
+      statusCode: 500,
+      success: false,
+      requestId,
+    });
     return new Response(
       JSON.stringify({
         error:

@@ -96,7 +96,7 @@ const BLOCKED_PATTERNS = [
   /\b(INSERT|UPDATE|DELETE|MERGE)\b/i,
   /\b(EXEC|EXECUTE|GRANT|REVOKE|DENY)\b/i,
   /\b(xp_|sp_)\w+/i,
-  /\bINTO\s+\w+/i,
+  /\bINTO\s+[#@]?\w+/i,
   /--/,
   /\/\*/,
   /;\s*(DROP|ALTER|CREATE|INSERT|UPDATE|DELETE|EXEC)/i,
