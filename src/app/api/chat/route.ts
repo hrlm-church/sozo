@@ -13,6 +13,7 @@ import { analyzeIntent, buildIntelContextBlock } from "@/lib/server/intent-route
 import { checkRateLimit, RATE_LIMITS, rateLimitHeaders } from "@/lib/server/rate-limit";
 import { createLogger, generateRequestId } from "@/lib/server/logger";
 import { trackRequest, trackMetric, trackException } from "@/lib/server/telemetry";
+import { getUserContext } from "@/lib/server/user-context";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -278,14 +279,23 @@ export async function POST(request: Request) {
       }
     }
 
-    // Get the current user's email for per-user memory
-    const ownerEmail = (await getSessionEmail()) ?? "anonymous@sozo.local";
+    // Get the current user's context (org, role)
+    const userCtx = await getUserContext();
+    const ownerEmail = userCtx?.email ?? (await getSessionEmail()) ?? "anonymous@sozo.local";
     const tools = getChatTools(ownerEmail);
     const modelMessages = await convertToModelMessages(uiMessages);
     const models = getModelChain();
 
     // Build system prompt with per-user context
     let systemPrompt = SYSTEM_PROMPT;
+
+    // Inject user role context
+    if (userCtx) {
+      systemPrompt += `\n\n## Current User\n- Email: ${userCtx.email}\n- Organization: ${userCtx.orgName}\n- Role: ${userCtx.role}`;
+      if (userCtx.role === "viewer") {
+        systemPrompt += `\n\nThis user has VIEW-ONLY access. They can view data but should not be prompted to create, edit, or delete resources. Do not offer to save dashboards or insights for them.`;
+      }
+    }
 
     // 1. Inject structured knowledge base (corrections, preferences, patterns)
     try {

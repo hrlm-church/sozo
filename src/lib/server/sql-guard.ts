@@ -55,6 +55,8 @@ const ALLOWED_TABLES = new Set([
   "sozo.insight",
   "sozo.conversation_summary",
   "sozo.knowledge",
+  "sozo.organization",
+  "sozo.org_member",
   // Gold layer (analytical views)
   "gold.constituent_360",
   "gold.person",
