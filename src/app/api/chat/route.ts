@@ -14,6 +14,14 @@ import { checkRateLimit, RATE_LIMITS, rateLimitHeaders } from "@/lib/server/rate
 import { createLogger, generateRequestId } from "@/lib/server/logger";
 import { trackRequest, trackMetric, trackException } from "@/lib/server/telemetry";
 import { getUserContext } from "@/lib/server/user-context";
+import {
+  isAvailable,
+  recordSuccess,
+  recordFailure,
+  allCircuitsOpen,
+  getCircuitState,
+} from "@/lib/server/circuit-breaker";
+import { recordTokenUsage, isOverBudget } from "@/lib/server/token-budget";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -282,6 +290,24 @@ export async function POST(request: Request) {
     // Get the current user's context (org, role)
     const userCtx = await getUserContext();
     const ownerEmail = userCtx?.email ?? (await getSessionEmail()) ?? "anonymous@sozo.local";
+
+    // Token budget check — block if org is over monthly limit
+    if (userCtx) {
+      try {
+        const overBudget = await isOverBudget(userCtx.orgId);
+        if (overBudget) {
+          log.warn("Token budget exceeded", { orgId: userCtx.orgId, userId: ownerEmail });
+          trackMetric("chat_budget_exceeded", 1);
+          return new Response(
+            JSON.stringify({ error: "Your organization has reached its monthly AI usage limit. Please contact an admin to increase the budget." }),
+            { status: 429, headers: { "Content-Type": "application/json" } },
+          );
+        }
+      } catch {
+        // Budget check failure shouldn't block the request
+      }
+    }
+
     const tools = getChatTools(ownerEmail);
     const modelMessages = await convertToModelMessages(uiMessages);
     const models = getModelChain();
@@ -384,11 +410,48 @@ export async function POST(request: Request) {
       systemPrompt += `\n\n${recipeMatch.instruction}`;
     }
 
-    // Try each model in order — fallback on rate limit or provider errors
+    // Build provider names for circuit breaker tracking
+    const providerNames = models.map((_, i) => `ai-provider-${i}`);
+
+    // Check if ALL providers are circuit-broken → graceful degradation
+    if (allCircuitsOpen(providerNames)) {
+      log.warn("All AI providers circuit-broken", {
+        providers: providerNames.map((n) => ({ name: n, ...getCircuitState(n) })),
+      });
+      const degradedText = "I'm temporarily unable to process your request — our AI services are experiencing issues. Please try again in a minute or two. Your message has been received and nothing was lost.";
+      const partId = crypto.randomUUID();
+      const chunks = [
+        { type: "text-start", id: partId },
+        { type: "text-delta", textDelta: degradedText },
+        { type: "text-end" },
+        { type: "finish", finishReason: "stop", usage: { inputTokens: 0, outputTokens: 0 } },
+      ];
+      const sseBody = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join("") + "data: [DONE]\n\n";
+      trackMetric("chat_circuit_breaker_degraded", 1);
+      return new Response(sseBody, {
+        status: 200,
+        headers: {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          "connection": "keep-alive",
+          "x-vercel-ai-ui-message-stream": "v1",
+        },
+      });
+    }
+
+    // Try each model in order — skip circuit-broken providers, fallback on errors
     for (let i = 0; i < models.length; i++) {
       const model = models[i];
+      const providerName = providerNames[i];
+
+      // Skip providers with open circuits
+      if (!isAvailable(providerName)) {
+        log.info("Skipping circuit-broken provider", { modelIndex: i, providerName, ...getCircuitState(providerName) });
+        continue;
+      }
+
       try {
-        log.info("Trying model", { modelIndex: i, messageCount: modelMessages.length, userId: ownerEmail });
+        log.info("Trying model", { modelIndex: i, providerName, messageCount: modelMessages.length, userId: ownerEmail });
 
         const result = streamText({
           model,
@@ -400,12 +463,15 @@ export async function POST(request: Request) {
           temperature: 0,
           seed: 42,
           onError: ({ error }) => {
-            log.error("Stream error", { modelIndex: i, error: String(error) });
+            log.error("Stream error", { modelIndex: i, providerName, error: String(error) });
           },
           onFinish: ({ text, finishReason, usage }) => {
             const durationMs = Date.now() - startTime;
+            // Record success for circuit breaker
+            recordSuccess(providerName);
             log.info("Chat completed", {
               modelIndex: i,
+              providerName,
               finishReason,
               inputTokens: usage?.inputTokens,
               outputTokens: usage?.outputTokens,
@@ -423,19 +489,32 @@ export async function POST(request: Request) {
             });
             trackMetric("chat_response_time_ms", durationMs);
             if (usage?.outputTokens) trackMetric("chat_output_tokens", usage.outputTokens);
+            // Record token usage for budget tracking (fire-and-forget)
+            if (userCtx && (usage?.inputTokens || usage?.outputTokens)) {
+              recordTokenUsage({
+                orgId: userCtx.orgId,
+                userEmail: ownerEmail,
+                inputTokens: usage?.inputTokens ?? 0,
+                outputTokens: usage?.outputTokens ?? 0,
+                modelName: providerName,
+                requestId,
+              });
+            }
           },
         });
 
         return result.toUIMessageStreamResponse();
       } catch (modelError) {
         const msg = modelError instanceof Error ? modelError.message : String(modelError);
-        log.warn("Model failed, trying next", { modelIndex: i, error: msg });
+        // Record failure for circuit breaker
+        recordFailure(providerName, msg);
+        log.warn("Model failed, trying next", { modelIndex: i, providerName, error: msg });
         if (i === models.length - 1) throw modelError; // Last model — rethrow
         // Otherwise try next model
       }
     }
 
-    // Should never reach here, but just in case
+    // All models skipped or failed
     throw new Error("No AI model available");
   } catch (error) {
     const durationMs = Date.now() - startTime;

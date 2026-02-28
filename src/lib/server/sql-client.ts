@@ -1,5 +1,6 @@
 import sql from "mssql";
 import { getServerEnv, looksConfigured } from "@/lib/server/env";
+import { withRetry, isTransientSqlError } from "@/lib/server/retry";
 
 type SqlRow = Record<string, unknown>;
 type ParamValue = string | number | boolean | null;
@@ -78,11 +79,21 @@ export const executeSql = async (
   }
 
   try {
-    const pool = await getPool();
-    const request = pool.request();
-    if (timeoutMs) (request as unknown as { timeout: number }).timeout = timeoutMs;
-    const result = await request.query(sqlText);
-    return { ok: true, rows: result.recordset ?? [] };
+    const rows = await withRetry(
+      async () => {
+        const pool = await getPool();
+        const request = pool.request();
+        if (timeoutMs) (request as unknown as { timeout: number }).timeout = timeoutMs;
+        const result = await request.query(sqlText);
+        return result.recordset ?? [];
+      },
+      {
+        maxAttempts: 3,
+        baseDelayMs: 200,
+        isRetryable: isTransientSqlError,
+      },
+    );
+    return { ok: true, rows };
   } catch (error) {
     return {
       ok: false,
@@ -110,12 +121,22 @@ export const executeSqlSafe = async (
   }
 
   try {
-    const pool = await getPool();
-    const request = pool.request();
-    if (timeoutMs) (request as unknown as { timeout: number }).timeout = timeoutMs;
-    bindParams(request, params);
-    const result = await request.query(sqlText);
-    return { ok: true, rows: result.recordset ?? [] };
+    const rows = await withRetry(
+      async () => {
+        const pool = await getPool();
+        const request = pool.request();
+        if (timeoutMs) (request as unknown as { timeout: number }).timeout = timeoutMs;
+        bindParams(request, params);
+        const result = await request.query(sqlText);
+        return result.recordset ?? [];
+      },
+      {
+        maxAttempts: 3,
+        baseDelayMs: 200,
+        isRetryable: isTransientSqlError,
+      },
+    );
+    return { ok: true, rows };
   } catch (error) {
     return {
       ok: false,
