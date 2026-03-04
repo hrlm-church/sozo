@@ -5,11 +5,11 @@ import { ChatPanel } from "@/components/chat/ChatPanel";
 import { DashboardCanvas } from "@/components/dashboard/DashboardCanvas";
 import { DashboardToolbar } from "@/components/dashboard/DashboardToolbar";
 
-export default function Home() {
+export default function ChatPage() {
   const [chatOpen, setChatOpen] = useState(true);
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "var(--app-bg)" }}>
+    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       <div style={{
         width: 660,
         flexShrink: 0,
