@@ -27,42 +27,26 @@ interface Insight {
   created_at: string;
 }
 
+interface RiskDonor {
+  person_id: string;
+  display_name: string;
+  risk_score: number;
+  risk_level: string;
+  annual_revenue_at_risk: number;
+}
+
 interface IntelData {
   metrics?: Metric[];
   insights?: Insight[];
-  risks?: { person_id: string; display_name: string; risk_score: number; risk_level: string; annual_revenue_at_risk: number }[];
+  risks?: RiskDonor[];
   summary?: { open_insights?: number; high_risk_donors?: number; metrics_computed?: number; last_snapshot_date?: string };
 }
 
-function formatValue(value: number, hint: string, unit: string): string {
+function formatMetricValue(value: number, hint: string, unit: string): string {
   if (hint === "currency" || unit === "USD") return `$${value?.toLocaleString(undefined, { maximumFractionDigits: 0 }) ?? "0"}`;
   if (hint === "percentage" || unit === "%") return `${(value ?? 0).toFixed(1)}%`;
   if (hint === "integer") return (value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
   return (value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
-}
-
-function DeltaBadge({ delta }: { delta: number | null }) {
-  if (delta === null || delta === undefined) return null;
-  const positive = delta >= 0;
-  return (
-    <span
-      style={{
-        fontSize: "0.72rem",
-        fontWeight: 600,
-        color: positive ? "var(--green)" : "var(--red)",
-        background: positive ? "rgba(52, 199, 89, 0.1)" : "rgba(255, 59, 48, 0.1)",
-        padding: "2px 8px",
-        borderRadius: 20,
-      }}
-    >
-      {positive ? "+" : ""}{delta.toFixed(1)}%
-    </span>
-  );
-}
-
-function SeverityDot({ severity }: { severity: string }) {
-  const color = severity === "critical" ? "var(--red)" : severity === "high" ? "var(--orange)" : "var(--accent)";
-  return <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />;
 }
 
 export default function DashboardHome() {
@@ -85,101 +69,189 @@ export default function DashboardHome() {
     return "Good evening";
   };
 
+  // Filter out zero/empty metrics — only show ones with real data
+  const meaningfulMetrics = (intel?.metrics ?? []).filter(
+    (m) => m.value !== null && m.value !== undefined && m.value !== 0,
+  );
+
+  // Total revenue at risk across all high-risk donors
+  const totalRevenueAtRisk = (intel?.risks ?? []).reduce(
+    (sum, r) => sum + (r.annual_revenue_at_risk ?? 0), 0,
+  );
+
+  const snapshotDate = intel?.summary?.last_snapshot_date
+    ? new Date(intel.summary.last_snapshot_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : null;
+
   return (
-    <div style={{ padding: "32px 40px", maxWidth: 1200 }}>
+    <div style={{ padding: "32px 40px", maxWidth: 1100 }}>
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: "1.6rem", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.03em", margin: 0 }}>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.03em", margin: 0 }}>
           {greeting()}{session?.user?.name ? `, ${session.user.name}` : ""}
         </h1>
-        <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", margin: "4px 0 0" }}>
-          Here&apos;s your ministry intelligence overview
-        </p>
+        {snapshotDate && (
+          <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "4px 0 0" }}>
+            Last updated {snapshotDate}
+          </p>
+        )}
       </div>
 
       {loading ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--text-muted)", fontSize: "0.84rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--text-muted)", fontSize: "0.84rem", padding: "60px 0" }}>
           <span className="loading-pulse" style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)" }} />
-          Loading intelligence data...
+          Loading intelligence briefing...
         </div>
       ) : (
         <>
-          {/* Summary stat cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, marginBottom: 32 }}>
-            <StatCard label="Open Insights" value={String(intel?.summary?.open_insights ?? 0)} icon="insight" />
-            <StatCard label="High-Risk Donors" value={String(intel?.summary?.high_risk_donors ?? 0)} icon="risk" />
-            <StatCard label="Metrics Tracked" value={String(intel?.summary?.metrics_computed ?? 0)} icon="metric" />
-            <StatCard
-              label="Last Snapshot"
-              value={intel?.summary?.last_snapshot_date ? new Date(intel.summary.last_snapshot_date).toLocaleDateString() : "N/A"}
-              icon="date"
-            />
-          </div>
-
-          {/* Metrics grid */}
-          {intel?.metrics && intel.metrics.length > 0 && (
-            <Section title="Key Metrics">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-                {intel.metrics.slice(0, 8).map((m) => (
-                  <div key={m.metric_key} className="card-base" style={{ padding: "16px 20px" }}>
-                    <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 500, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      {m.display_name}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                      <span style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-                        {formatValue(m.value, m.format_hint, m.unit)}
-                      </span>
-                      <DeltaBadge delta={m.delta_pct} />
-                    </div>
-                  </div>
-                ))}
+          {/* ── Briefing Card (hero) ── */}
+          {(intel?.insights ?? []).length > 0 && (
+            <div
+              className="card-base"
+              style={{
+                padding: "28px 32px",
+                marginBottom: 24,
+                borderLeft: "4px solid var(--accent)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <span style={{ fontSize: "1.1rem" }}>&#10024;</span>
+                <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                  Weekly Briefing
+                </span>
+                <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginLeft: "auto" }}>
+                  {snapshotDate}
+                </span>
               </div>
-            </Section>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+                {/* Attention needed */}
+                <div>
+                  <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--orange)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+                    Attention Needed
+                  </div>
+                  {intel!.insights!.slice(0, 3).map((insight) => (
+                    <div key={insight.insight_id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
+                      <span style={{
+                        color: insight.severity === "critical" ? "var(--red)" : "var(--orange)",
+                        fontSize: "0.78rem",
+                        lineHeight: 1.5,
+                        flexShrink: 0,
+                      }}>
+                        {insight.severity === "critical" ? "\u2716" : "\u26A0"}
+                      </span>
+                      <span style={{ fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                        {insight.summary}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Key numbers */}
+                <div>
+                  <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+                    Key Numbers
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <KeyNumber
+                      label="Donors at risk"
+                      value={(intel?.summary?.high_risk_donors ?? 0).toLocaleString()}
+                      color="var(--orange)"
+                    />
+                    <KeyNumber
+                      label="Annual revenue at risk"
+                      value={`$${totalRevenueAtRisk.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                      color="var(--red)"
+                    />
+                    <KeyNumber
+                      label="Open insights"
+                      value={String(intel?.summary?.open_insights ?? 0)}
+                      color="var(--accent)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Recommendation */}
+              {intel!.insights!.length > 0 && (
+                <div style={{
+                  marginTop: 18,
+                  padding: "12px 16px",
+                  background: "rgba(0, 113, 227, 0.04)",
+                  borderRadius: 10,
+                  fontSize: "0.82rem",
+                  color: "var(--text-secondary)",
+                  lineHeight: 1.5,
+                }}>
+                  <strong style={{ color: "var(--accent)" }}>Recommended:</strong>{" "}
+                  <Link href="/chat" style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 500 }}>
+                    Ask Sozo
+                  </Link>{" "}
+                  to analyze at-risk donors and generate a re-engagement strategy, or{" "}
+                  <Link href="/intelligence" style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 500 }}>
+                    view full intelligence report
+                  </Link>.
+                </div>
+              )}
+            </div>
           )}
 
-          {/* Active insights */}
-          {intel?.insights && intel.insights.length > 0 && (
-            <Section title="Active Insights">
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {intel.insights.slice(0, 6).map((insight) => (
-                  <div key={insight.insight_id} className="card-base" style={{ padding: "14px 20px", display: "flex", alignItems: "flex-start", gap: 12 }}>
-                    <SeverityDot severity={insight.severity} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "0.84rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: 2 }}>
-                        {insight.title}
-                      </div>
-                      <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.4 }}>
-                        {insight.summary}
-                      </div>
-                    </div>
-                    {insight.delta_pct !== null && (
-                      <DeltaBadge delta={insight.delta_pct} />
+          {/* ── Hero KPIs ── */}
+          {meaningfulMetrics.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12, marginBottom: 28 }}>
+              {meaningfulMetrics.slice(0, 6).map((m) => (
+                <div key={m.metric_key} className="card-base" style={{ padding: "18px 20px" }}>
+                  <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", fontWeight: 500, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    {m.display_name}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+                      {formatMetricValue(m.value, m.format_hint, m.unit)}
+                    </span>
+                    {m.delta_pct !== null && m.delta_pct !== undefined && m.delta_pct !== 0 && (
+                      <span style={{
+                        fontSize: "0.7rem",
+                        fontWeight: 600,
+                        color: m.delta_pct >= 0 ? "var(--green)" : "var(--red)",
+                      }}>
+                        {m.delta_pct >= 0 ? "+" : ""}{m.delta_pct.toFixed(1)}%
+                      </span>
                     )}
                   </div>
-                ))}
-              </div>
-            </Section>
+                </div>
+              ))}
+            </div>
           )}
 
-          {/* High-risk donors */}
-          {intel?.risks && intel.risks.length > 0 && (
-            <Section title="High-Risk Donors">
+          {/* ── Top At-Risk Donors ── */}
+          {(intel?.risks ?? []).length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <h2 style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+                  Top At-Risk Donors
+                </h2>
+                <Link href="/intelligence" style={{ fontSize: "0.76rem", color: "var(--accent)", textDecoration: "none", fontWeight: 500 }}>
+                  View all &rarr;
+                </Link>
+              </div>
               <div className="card-base" style={{ overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid var(--surface-border)" }}>
-                      <th style={{ textAlign: "left", padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Donor</th>
-                      <th style={{ textAlign: "left", padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Risk Level</th>
-                      <th style={{ textAlign: "right", padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Revenue at Risk</th>
+                      <th style={thStyle}>Donor</th>
+                      <th style={thStyle}>Risk</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Revenue at Risk</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {intel.risks.slice(0, 8).map((r) => (
+                    {intel!.risks!.slice(0, 5).map((r) => (
                       <tr key={r.person_id} style={{ borderBottom: "1px solid var(--surface-border)" }}>
-                        <td style={{ padding: "10px 16px", color: "var(--text-primary)", fontWeight: 500 }}>{r.display_name}</td>
+                        <td style={{ padding: "10px 16px", fontWeight: 500, color: "var(--text-primary)" }}>
+                          {r.display_name}
+                        </td>
                         <td style={{ padding: "10px 16px" }}>
                           <span style={{
-                            fontSize: "0.72rem",
+                            fontSize: "0.7rem",
                             fontWeight: 600,
                             padding: "2px 10px",
                             borderRadius: 20,
@@ -198,72 +270,46 @@ export default function DashboardHome() {
                   </tbody>
                 </table>
               </div>
-            </Section>
+            </div>
           )}
 
-          {/* Quick actions */}
-          <Section title="Quick Actions">
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
-              <QuickAction href="/chat" title="Ask Sozo" description="Chat with your data" icon="chat" />
-              <QuickAction href="/intelligence" title="Intelligence" description="View insights & alerts" icon="intel" />
-              <QuickAction href="/settings" title="Settings" description="Manage your workspace" icon="settings" />
-            </div>
-          </Section>
+          {/* ── Quick Actions ── */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            <ActionCard href="/chat" label="Ask Sozo" sub="Chat with your data" accent="var(--accent)" />
+            <ActionCard href="/intelligence" label="Intelligence" sub="Insights & risk analysis" accent="var(--accent-secondary)" />
+            <ActionCard href="/settings" label="Settings" sub="Manage workspace" accent="var(--text-muted)" />
+          </div>
         </>
       )}
     </div>
   );
 }
 
-function StatCard({ label, value, icon }: { label: string; value: string; icon: string }) {
-  const iconMap: Record<string, string> = { insight: "\u{1F4CA}", risk: "\u26A0\uFE0F", metric: "\u{1F4C8}", date: "\u{1F4C5}" };
+const thStyle: React.CSSProperties = {
+  textAlign: "left",
+  padding: "10px 16px",
+  color: "var(--text-muted)",
+  fontWeight: 500,
+  fontSize: "0.7rem",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+function KeyNumber({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="card-base" style={{ padding: "18px 20px", display: "flex", alignItems: "center", gap: 14 }}>
-      <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--accent-light)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem", flexShrink: 0 }}>
-        {iconMap[icon] ?? "\u{1F4CB}"}
-      </div>
-      <div>
-        <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>{value}</div>
-        <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 500 }}>{label}</div>
-      </div>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+      <span style={{ fontSize: "1.1rem", fontWeight: 700, color, letterSpacing: "-0.02em" }}>{value}</span>
+      <span style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>{label}</span>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function ActionCard({ href, label, sub, accent }: { href: string; label: string; sub: string; accent: string }) {
   return (
-    <section style={{ marginBottom: 32 }}>
-      <h2 style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: 12, letterSpacing: "-0.01em" }}>
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-function QuickAction({ href, title, description, icon }: { href: string; title: string; description: string; icon: string }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        textDecoration: "none",
-        display: "block",
-      }}
-    >
-      <div
-        className="card-base"
-        style={{
-          padding: "20px",
-          cursor: "pointer",
-          transition: "all 150ms ease",
-        }}
-      >
-        <div style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
-          {title}
-        </div>
-        <div style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>
-          {description}
-        </div>
+    <Link href={href} style={{ textDecoration: "none" }}>
+      <div className="card-base" style={{ padding: "18px 20px", cursor: "pointer", borderTop: `3px solid ${accent}` }}>
+        <div style={{ fontSize: "0.86rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>{sub}</div>
       </div>
     </Link>
   );
