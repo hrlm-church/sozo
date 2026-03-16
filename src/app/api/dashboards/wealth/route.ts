@@ -7,24 +7,24 @@ export async function GET() {
   try {
     const [capacityTiers, givingGap, upgradeCandidates, screenedVsTotal] =
       await Promise.all([
-        // capacity_tiers: count + sum by giving_capacity_label
+        // capacity_tiers: count + sum by capacity_label
         executeSql(
-          `SELECT ws.giving_capacity_label,
+          `SELECT ws.capacity_label,
                   COUNT(*) AS donor_count,
                   SUM(ds.total_given) AS total_given
            FROM serving.wealth_screening ws
            JOIN serving.donor_summary ds ON ws.person_id = ds.person_id
            WHERE ds.display_name <> 'Unknown'
-             AND ws.giving_capacity_label IS NOT NULL
-           GROUP BY ws.giving_capacity_label
+             AND ws.capacity_label IS NOT NULL
+           GROUP BY ws.capacity_label
            ORDER BY total_given DESC`,
           30000,
         ),
 
         // giving_gap: avg capacity vs avg actual giving by tier
         executeSql(
-          `SELECT ws.giving_capacity_label,
-                  AVG(ws.estimated_annual_capacity) AS avg_capacity,
+          `SELECT ws.capacity_label,
+                  AVG(ws.giving_capacity) AS avg_capacity,
                   AVG(
                     CASE WHEN DATEDIFF(year, ds.first_gift_date, GETDATE()) > 0
                          THEN ds.total_given / DATEDIFF(year, ds.first_gift_date, GETDATE())
@@ -35,8 +35,8 @@ export async function GET() {
            FROM serving.wealth_screening ws
            JOIN serving.donor_summary ds ON ws.person_id = ds.person_id
            WHERE ds.display_name <> 'Unknown'
-             AND ws.giving_capacity_label IS NOT NULL
-           GROUP BY ws.giving_capacity_label
+             AND ws.capacity_label IS NOT NULL
+           GROUP BY ws.capacity_label
            ORDER BY avg_capacity DESC`,
           30000,
         ),
@@ -46,14 +46,14 @@ export async function GET() {
           `SELECT TOP 20
                   ws.person_id,
                   ds.display_name,
-                  ws.estimated_annual_capacity,
-                  ws.giving_capacity_label,
+                  ws.giving_capacity,
+                  ws.capacity_label,
                   ds.total_given,
                   CASE WHEN DATEDIFF(year, ds.first_gift_date, GETDATE()) > 0
                        THEN ds.total_given / DATEDIFF(year, ds.first_gift_date, GETDATE())
                        ELSE ds.total_given
                   END AS annualized_giving,
-                  ws.estimated_annual_capacity -
+                  ws.giving_capacity -
                     CASE WHEN DATEDIFF(year, ds.first_gift_date, GETDATE()) > 0
                          THEN ds.total_given / DATEDIFF(year, ds.first_gift_date, GETDATE())
                          ELSE ds.total_given
@@ -61,7 +61,7 @@ export async function GET() {
            FROM serving.wealth_screening ws
            JOIN serving.donor_summary ds ON ws.person_id = ds.person_id
            WHERE ds.display_name <> 'Unknown'
-             AND ws.estimated_annual_capacity IS NOT NULL
+             AND ws.giving_capacity IS NOT NULL
            ORDER BY giving_gap DESC`,
           30000,
         ),

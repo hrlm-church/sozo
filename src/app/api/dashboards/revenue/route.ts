@@ -28,7 +28,7 @@ export async function GET() {
              UNION ALL
 
              SELECT 'Events' AS stream,
-                    FORMAT(event_detail.event_name, 'yyyy-MM') AS revenue_month,
+                    event_month AS revenue_month,
                     price AS amount
              FROM serving.event_detail
              WHERE display_name <> 'Unknown'

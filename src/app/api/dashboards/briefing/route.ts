@@ -35,10 +35,8 @@ export async function GET() {
                   created_at
            FROM intel.insight
            WHERE is_active = 1
-             AND severity IN ('critical', 'high')
-           ORDER BY
-             CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,
-             created_at DESC`,
+             AND severity >= 4
+           ORDER BY severity DESC, created_at DESC`,
           30000,
         ),
 

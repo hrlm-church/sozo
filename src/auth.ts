@@ -46,9 +46,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const isLoginPage = nextUrl.pathname === "/login";
       const isAuthApi = nextUrl.pathname.startsWith("/api/auth");
       const isHealthApi = nextUrl.pathname === "/api/health";
+      const isDashboardApi = nextUrl.pathname.startsWith("/api/dashboards");
 
-      // Always allow auth routes and health check
-      if (isAuthApi || isHealthApi) return true;
+      // Always allow auth routes, health check, and dashboard APIs
+      if (isAuthApi || isHealthApi || isDashboardApi) return true;
       // TODO: Remove before production — allows unauthenticated chat API access for testing
       if (nextUrl.pathname === "/api/chat") return true;
 

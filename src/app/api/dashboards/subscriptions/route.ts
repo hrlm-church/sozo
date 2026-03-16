@@ -22,13 +22,14 @@ export async function GET() {
         `SELECT TOP 20
                 person_id,
                 display_name,
-                total_given,
-                last_gift_date,
-                days_since_last,
-                lifecycle_stage
+                annual_value,
+                monthly_amount,
+                last_used_date,
+                status,
+                category
          FROM serving.lost_recurring_donors
          WHERE display_name <> 'Unknown'
-         ORDER BY total_given DESC`,
+         ORDER BY annual_value DESC`,
         30000,
       ),
 

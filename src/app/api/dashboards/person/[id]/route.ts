@@ -53,7 +53,7 @@ export async function GET(
           30000,
         ),
         executeSql(
-          `SELECT giving_capacity_label, estimated_annual_capacity
+          `SELECT capacity_label, giving_capacity
            FROM serving.wealth_screening
            WHERE person_id = ${personId}
              AND display_name <> 'Unknown'`,

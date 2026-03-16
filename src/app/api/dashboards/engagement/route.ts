@@ -5,36 +5,28 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const [signalGroups, topEngaged, commTrend, unengaged] =
+    const [topEngaged, commTrend, unengaged] =
       await Promise.all([
-        // signal_groups: count by tag_group
-        executeSql(
-          `SELECT tag_group,
-                  COUNT(*) AS tag_count,
-                  COUNT(DISTINCT person_id) AS person_count
-           FROM serving.tag_detail
-           WHERE display_name <> 'Unknown'
-             AND tag_group IS NOT NULL
-           GROUP BY tag_group
-           ORDER BY person_count DESC`,
-          30000,
-        ),
-
-        // top_engaged: top 30 by tag count
+        // top_engaged: top 30 donors by donation_count + event attendance
         executeSql(
           `SELECT TOP 30
-                  td.person_id,
+                  ds.person_id,
                   ds.display_name,
-                  COUNT(*) AS tag_count,
+                  ds.donation_count,
                   ds.total_given,
                   ds.lifecycle_stage,
-                  ds.last_gift_date
-           FROM serving.tag_detail td
-           JOIN serving.donor_summary ds ON td.person_id = ds.person_id
+                  ds.last_gift_date,
+                  ds.active_months,
+                  ISNULL(ec.event_count, 0) AS event_count
+           FROM serving.donor_summary ds
+           LEFT JOIN (
+             SELECT person_id, COUNT(*) AS event_count
+             FROM serving.event_detail
+             WHERE display_name <> 'Unknown'
+             GROUP BY person_id
+           ) ec ON ds.person_id = ec.person_id
            WHERE ds.display_name <> 'Unknown'
-           GROUP BY td.person_id, ds.display_name, ds.total_given,
-                    ds.lifecycle_stage, ds.last_gift_date
-           ORDER BY tag_count DESC`,
+           ORDER BY ds.donation_count + ISNULL(ec.event_count, 0) DESC`,
           30000,
         ),
 
@@ -51,36 +43,32 @@ export async function GET() {
           30000,
         ),
 
-        // unengaged_high_value: total_given > 1000 but tag count < 5
+        // unengaged_high_value: high giving but inactive
         executeSql(
-          `SELECT ds.person_id,
+          `SELECT TOP 30
+                  ds.person_id,
                   ds.display_name,
                   ds.total_given,
                   ds.last_gift_date,
+                  ds.days_since_last,
                   ds.lifecycle_stage,
-                  ISNULL(tc.tag_count, 0) AS tag_count
+                  ds.donation_count
            FROM serving.donor_summary ds
-           LEFT JOIN (
-             SELECT person_id, COUNT(*) AS tag_count
-             FROM serving.tag_detail
-             GROUP BY person_id
-           ) tc ON ds.person_id = tc.person_id
            WHERE ds.display_name <> 'Unknown'
              AND ds.total_given > 1000
-             AND ISNULL(tc.tag_count, 0) < 5
+             AND ds.days_since_last > 365
            ORDER BY ds.total_given DESC`,
           30000,
         ),
       ]);
 
-    for (const r of [signalGroups, topEngaged, commTrend, unengaged]) {
+    for (const r of [topEngaged, commTrend, unengaged]) {
       if (!r.ok) {
         return NextResponse.json({ error: r.reason }, { status: 500 });
       }
     }
 
     return NextResponse.json({
-      signal_groups: signalGroups.rows,
       top_engaged: topEngaged.rows,
       communication_trend: commTrend.rows,
       unengaged_high_value: unengaged.rows,

@@ -62,7 +62,7 @@ export async function GET() {
         // lost_recurring summary
         executeSql(
           `SELECT COUNT(*) AS lost_count,
-                  SUM(total_given) AS total_monthly_value_lost
+                  SUM(monthly_amount) AS total_monthly_value_lost
            FROM serving.lost_recurring_donors
            WHERE display_name <> 'Unknown'`,
           30000,
