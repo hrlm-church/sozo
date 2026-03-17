@@ -38,6 +38,8 @@ serving.event_detail (21K) — person_id, display_name, event_name, ticket_type,
 ### Tags (5.7M assignments)
 serving.tag_detail (5.7M) — person_id, display_name, tag_value, tag_group, applied_at, source_system
 tag_group values: 'Donor Assignment','True Girl','B2BB','Nurture Tags','Customer Tags','Box Tracking','Mailchimp Audience','Shopify Customer'
+serving.tag_summary (materialized) — person_id, display_name, tag_group, tag_count, distinct_tags, most_recent_tag, most_recent_at
+PERFORMANCE: For tag counts/aggregations, ALWAYS use serving.tag_summary instead of COUNT(*) on tag_detail. Only use tag_detail when you need individual tag names.
 
 ### Engagement
 serving.communication_detail (24K) — person_id, display_name, channel, direction, subject, sent_at
@@ -49,6 +51,13 @@ JOIN to donor_summary on person_id to compare giving_capacity vs total_given.
 ### Special Views
 serving.lost_recurring_donors (383) — person_id, display_name, monthly_amount, annual_value, frequency, status, category. Lost MRR: $17K/month ($206K/year).
 serving.stripe_customer (6.8K) — person_id, email, display_name, total_spend, payment_count, refunded_volume
+
+### Sozo Intelligence (internal platform tables)
+sozo.action — id, owner_email, title, description, action_type ('call','email','thank','reengage','review','general'), priority_score (0-100), person_name, status ('pending','in_progress','completed','dismissed'), source ('ai','briefing','manual'), due_date, outcome, outcome_value, outcome_date
+sozo.alert — id, owner_email, alert_type ('churn_risk','milestone','anomaly','giving_drop','new_donor'), severity ('info','warning','critical'), title, body, person_name, is_read
+sozo.briefing — id, owner_email, briefing_date, content_json, metrics_json, action_count
+sozo.goal — id, owner_email, title, goal_type ('donors','revenue','retention','engagement','custom'), target_value, current_value, unit, target_date, status ('active','completed','paused')
+sozo.audit_log — id, owner_email, action, target_system, target_id, person_name, payload_json, status ('pending','success','failed')
 
 ## SQL Rules
 - NEVER include person_id, donation_id, or any _id column in SELECT output

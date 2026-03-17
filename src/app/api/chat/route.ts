@@ -7,6 +7,7 @@ import { getRecentInsights } from "@/lib/server/insights";
 import { getActiveKnowledge, formatKnowledgeForPrompt, formatMemoriesForPrompt } from "@/lib/server/memory";
 import { memorySearch } from "@/lib/server/memory-search";
 import { getSessionEmail } from "@/lib/server/session";
+import { rateLimit } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -108,6 +109,8 @@ You have two learning tools:
 3. **show_widget** — Display interactive visualization. Types: kpi, stat_grid, bar_chart, line_chart, area_chart, donut_chart, table, drill_down_table, funnel, text.
 4. **save_insight** — Save a specific data finding (expires in 30 days). Use for notable query results.
 5. **save_knowledge** — Save a specific permanent learning (correction, preference, pattern, fact, persona). One fact per call.
+6. **create_action** — Create an action item in the user's queue. Use proactively when your analysis reveals someone to call, thank, re-engage, or follow up with. Include specific names, amounts, and reasons.
+7. **draft_email** — Draft a personalized outreach email. Returns a draft for the user to review — never auto-sends. Use for thank-you notes, re-engagement, upgrade asks, or event invitations.
 
 ## Reasoning & Workflow
 Before answering, THINK about what the user really needs:
@@ -194,6 +197,16 @@ export async function POST(request: Request) {
 
     // Get the current user's email for per-user memory
     const ownerEmail = (await getSessionEmail()) ?? "anonymous@sozo.local";
+
+    // Rate limit: 10 requests per minute per user
+    const rl = rateLimit(`chat:${ownerEmail}`, 10, 60_000);
+    if (!rl.allowed) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Please wait a moment." }),
+        { status: 429, headers: { "Content-Type": "application/json", "Retry-After": String(Math.ceil((rl.retryAfterMs ?? 60000) / 1000)) } },
+      );
+    }
+
     const tools = getChatTools(ownerEmail);
     const modelMessages = await convertToModelMessages(uiMessages);
     const models = getModelChain();

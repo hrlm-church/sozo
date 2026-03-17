@@ -7,9 +7,9 @@ import { useState } from "react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: "house" },
-  { href: "/dashboards", label: "Dashboards", icon: "dashboards" },
-  { href: "/chat", label: "Chat", icon: "chat" },
-  { href: "/intelligence", label: "Intelligence", icon: "intel" },
+  { href: "/people", label: "People", icon: "people" },
+  { href: "/actions", label: "Actions", icon: "actions" },
+  { href: "/briefing", label: "Briefing", icon: "briefing" },
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
@@ -31,36 +31,32 @@ function NavIcon({ type, active }: { type: string; active: boolean }) {
           <path d="M8 18V12H12V18" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
-    case "chat":
+    case "people":
+      return (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <circle cx="7" cy="7" r="3" stroke={color} strokeWidth="1.5" fill={active ? "var(--accent-light)" : "none"} />
+          <path d="M2 17C2 14.2386 4.23858 12 7 12C9.76142 12 12 14.2386 12 17" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="14" cy="8" r="2.5" stroke={color} strokeWidth="1.5" fill={active ? "var(--accent-light)" : "none"} />
+          <path d="M13 17C13 14.7909 14.7909 13 17 13" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      );
+    case "actions":
+      return (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <rect x="3" y="3" width="14" height="14" rx="3" stroke={color} strokeWidth="1.5" fill={active ? "var(--accent-light)" : "none"} />
+          <path d="M7 10L9 12L13 8" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "briefing":
       return (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
           <path
-            d="M3 5C3 3.89543 3.89543 3 5 3H15C16.1046 3 17 3.89543 17 5V12C17 13.1046 16.1046 14 15 14H7L3 17V5Z"
+            d="M4 3H16C16.5523 3 17 3.44772 17 4V16C17 16.5523 16.5523 17 16 17H4C3.44772 17 3 16.5523 3 16V4C3 3.44772 3.44772 3 4 3Z"
             stroke={color}
             strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
             fill={active ? "var(--accent-light)" : "none"}
           />
-        </svg>
-      );
-    case "intel":
-      return (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <path d="M10 3V17" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-          <path d="M6 7V17" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-          <path d="M14 5V17" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-          <path d="M2 11V17" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-          <path d="M18 9V17" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-      );
-    case "dashboards":
-      return (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <rect x="2" y="2" width="7" height="7" rx="1.5" stroke={color} strokeWidth="1.5" fill={active ? "var(--accent-light)" : "none"} />
-          <rect x="11" y="2" width="7" height="4" rx="1.5" stroke={color} strokeWidth="1.5" fill={active ? "var(--accent-light)" : "none"} />
-          <rect x="11" y="9" width="7" height="9" rx="1.5" stroke={color} strokeWidth="1.5" fill={active ? "var(--accent-light)" : "none"} />
-          <rect x="2" y="12" width="7" height="6" rx="1.5" stroke={color} strokeWidth="1.5" fill={active ? "var(--accent-light)" : "none"} />
+          <path d="M7 7H13M7 10H13M7 13H10" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       );
     case "settings":

@@ -6,6 +6,7 @@ import { hybridSearch } from "@/lib/server/search-client";
 
 import { saveInsight } from "@/lib/server/insights";
 import { saveKnowledge } from "@/lib/server/memory";
+import { executeSql as execSqlDirect } from "@/lib/server/sql-client";
 import type { Widget, WidgetType, WidgetConfig } from "@/types/widget";
 
 /**
@@ -274,6 +275,96 @@ export function getChatTools(ownerEmail?: string) {
         if (!ownerEmail) return { ok: false, error: "No user session" };
         const result = await saveKnowledge(ownerEmail, category, content, confidence, supersedes);
         return result;
+      },
+    }),
+
+    create_action: tool({
+      description:
+        "Create an action item in the user's action queue. Use this when your analysis " +
+        "reveals something the user should DO — a person to call, thank, re-engage, or review. " +
+        "Actions appear in the /actions page sorted by priority. " +
+        "Create actions proactively when you spot opportunities or risks in the data.",
+      inputSchema: z.object({
+        title: z.string().max(500).describe("Clear, actionable title (e.g., 'Call Kay Barker — 427 days silent, $160K lifetime')"),
+        description: z.string().max(2000).optional().describe("Additional context about why this action matters"),
+        action_type: z
+          .enum(["call", "email", "thank", "reengage", "review", "general"])
+          .default("general")
+          .describe("Type of action"),
+        priority_score: z
+          .number()
+          .min(0)
+          .max(100)
+          .default(50)
+          .describe("Priority 0-100 (higher = more urgent). 90+ for critical revenue at risk, 70-89 for important, 50-69 moderate"),
+        person_name: z.string().optional().describe("Name of the person this action relates to"),
+        due_date: z.string().optional().describe("Suggested due date (YYYY-MM-DD)"),
+      }),
+      execute: async ({ title, description, action_type, priority_score, person_name, due_date }) => {
+        if (!ownerEmail) return { ok: false, error: "No user session" };
+        const id = crypto.randomUUID();
+        const esc = (s: string) => s.replace(/'/g, "''");
+        const result = await execSqlDirect(`
+          INSERT INTO sozo.action (id, owner_email, title, description, action_type, priority_score, person_name, source, due_date)
+          VALUES (
+            '${id}',
+            N'${esc(ownerEmail)}',
+            N'${esc(title.slice(0, 500))}',
+            ${description ? `N'${esc(description.slice(0, 2000))}'` : "NULL"},
+            N'${esc(action_type)}',
+            ${priority_score},
+            ${person_name ? `N'${esc(person_name.slice(0, 256))}'` : "NULL"},
+            'ai',
+            ${due_date ? `'${esc(due_date)}'` : "NULL"}
+          )
+        `);
+        if (!result.ok) return { ok: false, error: result.reason };
+        return { ok: true, id, message: `Action created: "${title}"` };
+      },
+    }),
+
+    draft_email: tool({
+      description:
+        "Draft a personalized outreach email for the user to review. " +
+        "Use person context from your analysis to write a relevant, warm email. " +
+        "Returns a draft — NEVER auto-sends. The user reviews and sends manually. " +
+        "Great for: thank you notes, re-engagement, upgrade asks, event invitations.",
+      inputSchema: z.object({
+        purpose: z
+          .enum(["thank_you", "reengagement", "upgrade_ask", "event_invite", "general"])
+          .describe("The purpose of the email"),
+        person_name: z.string().describe("Recipient's name"),
+        person_email: z.string().optional().describe("Recipient's email (if known)"),
+        context: z.string().describe("Key context about this person (giving history, relationship, what prompted this outreach)"),
+        tone: z
+          .enum(["warm", "professional", "casual", "grateful"])
+          .default("warm")
+          .describe("Email tone"),
+      }),
+      execute: async ({ purpose, person_name, person_email, context, tone }) => {
+        // Draft the email using a template approach (no API call — the LLM itself
+        // generates the draft in its response based on our instructions)
+        const purposeLabels: Record<string, string> = {
+          thank_you: "Thank You",
+          reengagement: "Re-engagement",
+          upgrade_ask: "Giving Upgrade",
+          event_invite: "Event Invitation",
+          general: "Outreach",
+        };
+
+        return {
+          ok: true,
+          draft: {
+            to: person_email ?? `[${person_name}'s email]`,
+            subject: `[Draft ${purposeLabels[purpose]}]`,
+            purpose,
+            person_name,
+            context,
+            tone,
+            instructions: `Generate a ${tone} ${purposeLabels[purpose]} email to ${person_name} based on this context: ${context}. Keep it personal, brief (3-4 paragraphs max), and include a specific call to action. Sign from the ministry team.`,
+          },
+          message: `Email draft prepared for ${person_name}. Review the draft below and customize before sending.`,
+        };
       },
     }),
   };
